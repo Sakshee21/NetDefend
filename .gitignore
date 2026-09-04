@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+env/
+.env
+
+# Data — too large for git
+datasets/raw/*
+datasets/processed/*
+*.pcap
+*.pkl
+
+# Node
+node_modules/
+frontend/build/
+frontend/dist/
+
+# Jupyter / Colab
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Experiment outputs
+experiments/results/*.csv
+logs/*.log
