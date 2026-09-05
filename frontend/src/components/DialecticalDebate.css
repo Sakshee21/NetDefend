@@ -1,0 +1,509 @@
+.debate {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.muted {
+  color: var(--text-faint);
+}
+
+/* --- Thesis / antithesis columns ------------------------------------------ */
+
+.argument-grid {
+  display: grid;
+  grid-template-columns: 1fr 46px 1fr;
+  align-items: stretch;
+  gap: 0;
+}
+
+.argument {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, var(--bg-panel), var(--bg-base));
+  box-shadow: var(--shadow);
+}
+
+.argument.thesis {
+  border-color: var(--attack-line);
+  background: linear-gradient(180deg, #1a0d12, var(--bg-base) 60%);
+}
+
+.argument.antithesis {
+  border-color: var(--misconfig-line);
+  background: linear-gradient(180deg, #0b1425, var(--bg-base) 60%);
+}
+
+.argument::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.argument.thesis::before {
+  background: linear-gradient(90deg, var(--attack), transparent);
+}
+
+.argument.antithesis::before {
+  background: linear-gradient(90deg, var(--misconfig), transparent);
+}
+
+.argument.is-prevailing {
+  box-shadow: var(--shadow), 0 0 0 1px currentColor;
+}
+
+.argument.thesis.is-prevailing {
+  color: var(--attack);
+}
+
+.argument.antithesis.is-prevailing {
+  color: var(--misconfig);
+}
+
+.argument-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.argument-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border: 1px solid currentColor;
+  border-radius: 9px;
+}
+
+.thesis .argument-icon {
+  border-color: var(--attack-line);
+  background: var(--attack-soft);
+  color: var(--attack);
+}
+
+.antithesis .argument-icon {
+  border-color: var(--misconfig-line);
+  background: var(--misconfig-soft);
+  color: var(--misconfig);
+}
+
+.argument-agent {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.argument-stance {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.thesis .argument-stance {
+  color: #ff4d5ecc;
+}
+
+.antithesis .argument-stance {
+  color: #4d94ffcc;
+}
+
+.prevail-flag {
+  margin-left: auto;
+  padding: 3px 9px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.argument-summary {
+  margin: 0;
+  padding: 14px 16px;
+  border-left: 2px solid currentColor;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: #ffffff06;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.thesis .argument-summary {
+  border-left-color: var(--attack);
+}
+
+.antithesis .argument-summary {
+  border-left-color: var(--misconfig);
+}
+
+.argument-tag {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+}
+
+.argument-tag-value {
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.argument-evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.argument-evidence ul {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.argument-evidence li {
+  display: flex;
+  gap: 10px;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.bullet {
+  width: 5px;
+  height: 5px;
+  margin-top: 8px;
+  flex: none;
+  border-radius: 1px;
+  transform: rotate(45deg);
+}
+
+.thesis .bullet {
+  background: var(--attack);
+}
+
+.antithesis .bullet {
+  background: var(--misconfig);
+}
+
+.argument-divider {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 0;
+}
+
+.divider-line {
+  width: 1px;
+  flex: 1;
+  background: linear-gradient(180deg, transparent, var(--line-strong), transparent);
+}
+
+.divider-badge {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--bg-base);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+/* --- Refutation thread ---------------------------------------------------- */
+
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 20px 22px 24px;
+}
+
+.round {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 14px;
+}
+
+.round-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.round-number {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--bg-panel-2);
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.round-line {
+  width: 1px;
+  flex: 1;
+  background: linear-gradient(180deg, var(--line-strong), transparent);
+}
+
+.round-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.round-caption {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.round-caption strong {
+  font-weight: 550;
+}
+
+.side-thesis {
+  color: var(--attack);
+}
+
+.side-antithesis {
+  color: var(--misconfig);
+}
+
+.bubble {
+  display: flex;
+  gap: 11px;
+  padding: 13px 15px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-panel-2);
+}
+
+.bubble.response {
+  margin-left: 26px;
+  background: var(--bg-input);
+}
+
+.bubble.side-thesis {
+  border-color: #ff4d5e33;
+}
+
+.bubble.side-antithesis {
+  border-color: #4d94ff33;
+}
+
+.bubble.challenge {
+  border-style: dashed;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.side-thesis .avatar,
+.bubble.side-thesis .avatar {
+  border-color: var(--attack-line);
+  background: var(--attack-soft);
+  color: var(--attack);
+}
+
+.side-antithesis .avatar,
+.bubble.side-antithesis .avatar {
+  border-color: var(--misconfig-line);
+  background: var(--misconfig-soft);
+  color: var(--misconfig);
+}
+
+.bubble-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.bubble-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 3px;
+}
+
+.bubble-who {
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--text);
+}
+
+.bubble-label {
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.bubble-text {
+  color: var(--text-dim);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.bubble.challenge .bubble-text {
+  font-style: italic;
+}
+
+.round-empty {
+  padding: 4px 0;
+}
+
+/* --- Verdict -------------------------------------------------------------- */
+
+.verdict {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 26px;
+  overflow: hidden;
+  padding: 26px 28px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-lg);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow);
+}
+
+.verdict-glow {
+  position: absolute;
+  inset: -60% 40% auto -10%;
+  height: 260px;
+  background: radial-gradient(closest-side, currentColor, transparent);
+  opacity: 0.14;
+  pointer-events: none;
+}
+
+.verdict-left {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 280px;
+  flex: 1;
+}
+
+.verdict-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.verdict-rationale {
+  max-width: 54ch;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.verdict-right {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 260px;
+}
+
+.verdict-confidence {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.verdict-number {
+  font-size: 26px;
+  font-weight: 600;
+}
+
+.meter {
+  display: flex;
+  gap: 3px;
+  height: 26px;
+}
+
+.meter-seg {
+  flex: 1;
+  border-radius: 2px;
+  background: #ffffff0f;
+}
+
+.meter-seg.is-on {
+  background: currentColor;
+  box-shadow: 0 0 8px -2px currentColor;
+}
+
+.verdict-meta {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* --- Responsive ----------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .argument-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .argument-divider {
+    flex-direction: row;
+    padding: 0;
+  }
+
+  .divider-line {
+    width: auto;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--line-strong), transparent);
+  }
+
+  .thread {
+    padding: 16px;
+  }
+
+  .bubble.response {
+    margin-left: 12px;
+  }
+
+  .verdict {
+    padding: 20px;
+  }
+
+  .verdict-badge {
+    font-size: 26px;
+  }
+}

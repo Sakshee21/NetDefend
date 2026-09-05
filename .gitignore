@@ -26,3 +26,5 @@ Thumbs.db
 # Experiment outputs
 experiments/results/*.csv
 logs/*.log
+
+CLAUDE.md
