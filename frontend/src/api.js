@@ -127,9 +127,15 @@ export const MOCK_REPORT = {
         'SYN pattern is consistent with backup software reconnection attempts due to misrouted subnet.',
     },
   ],
+  // TODO(backend): once the Incident Response Agent produces this field for real,
+  // add a validation step that checks recommended_action is topically consistent
+  // with the classified mitre_ttp before the report is returned. This mock
+  // previously paired a T1021.002 (SMB, port 445) classification with a DNS
+  // port 53 remediation, and the mismatch was only caught by reading it. A
+  // check on the agent output would catch that class of error automatically.
   recommended_action:
-    'Block outbound UDP port 53 on host 192.168.1.45; inspect DNS query history for the last 72 hours.',
-  affected_host: '192.168.1.45',
+    'Isolate affected hosts on the SMB traffic subnet; disable SMB (port 445) access on non-administrative endpoints; audit lateral authentication attempts across the affected hosts over the past 24 hours.',
+  affected_host: '192.168.10.45',
   timestamp: '2026-09-05T14:23:41Z',
 }
 
