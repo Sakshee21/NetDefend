@@ -8,7 +8,6 @@ env/
 # Data — too large for git
 datasets/raw/*
 datasets/processed/*
-*.pcap
 *.pkl
 
 # Node
