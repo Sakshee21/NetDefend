@@ -9,11 +9,12 @@ from feature_extractor import calculate_features
 # File paths
 # ---------------------------------------
 
-PCAP_FILE = "../dataset/raw/test_normal.pcapng"
-
-OUTPUT_FILE = "../dataset/processed/flows.csv"
-
-
+# PCAP_FILE = "../dataset/raw/test_normal.pcapng" #for real pcap
+#PCAP_FILE = "../dataset/raw/mininet_normal.pcap" #for mininet pcap
+#OUTPUT_FILE = "../dataset/processed/flows.csv" # for real pcap output
+#OUTPUT_FILE = "../dataset/processed/mininet_normal_flows.csv" #for mininet normal pcap output
+PCAP_FILE = "../dataset/raw/acl_misconfig.pcap"
+OUTPUT_FILE = "../dataset/processed/acl_misconfig_flows.csv"
 def main():
 
     print("=" * 50)
