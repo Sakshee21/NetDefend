@@ -1,0 +1,10 @@
+{
+    "scenario": "ACL_MISCONFIGURATION",
+    "ground_truth": "MISCONFIGURATION",
+    "source": "10.0.0.1",
+    "destination": "10.0.0.2",
+    "protocol": "TCP",
+    "destination_port": 8000,
+    "action": "DROP",
+    "description": "Legitimate HTTP traffic from h1 to h2 is blocked by an incorrectly configured firewall rule."
+}
