@@ -23,7 +23,7 @@ import pandas as pd
 
 from agents.state_schema import NetDefendState
 
-MODEL_DIR = Path("models")
+MODEL_DIR = Path(__file__).resolve().parent.parent / "ml" / "models"
 FEATURE_COLUMNS = [
     "packet_count", "byte_count", "duration_s", "packets_per_sec",
     "bytes_per_sec", "mean_inter_arrival", "std_inter_arrival",
