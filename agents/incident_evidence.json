@@ -1,0 +1,54 @@
+{
+    "network_observation": {
+        "flow_count": 10,
+        "total_packets": 19,
+        "total_bytes": 1419,
+        "protocols": [
+            "ICMPv6",
+            "TCP",
+            "UDP"
+        ],
+        "total_syn_packets": 13,
+        "total_synack_packets": 0,
+        "total_rst_packets": 0,
+        "average_packets_per_sec": 1.129112215466725,
+        "average_bytes_per_sec": 83.53060810911722,
+        "average_flow_duration_s": 14.233982634544372
+    },
+    "ml_evidence": {
+        "random_forest": {
+            "prediction": "Benign",
+            "confidence": 0.7
+        },
+        "isolation_forest": {
+            "prediction": "Normal"
+        }
+    },
+    "configuration_evidence": {
+        "firewall_rule": "-A INPUT -s 10.0.0.1/32 -p tcp --dport 8000 -j DROP",
+        "rule_effect": "Drops TCP traffic from 10.0.0.1 to destination port 8000"
+    },
+    "log_evidence": {},
+    "context": {
+        "scenario": "ACL_TEST",
+        "source_ip": "10.0.0.1",
+        "destination_ip": "10.0.0.2",
+        "protocol": "TCP",
+        "destination_port": 8000,
+        "observed_service": "HTTP",
+        "observed_problem": "HTTP connection failed",
+        "traffic_expected": true
+    },
+    "correlation_evidence": {
+        "traffic_source": "10.0.0.1",
+        "traffic_destination": "10.0.0.2",
+        "traffic_protocol": "TCP",
+        "traffic_destination_port": 8000,
+        "firewall_source": "10.0.0.1",
+        "firewall_protocol": "TCP",
+        "firewall_destination_port": 8000,
+        "firewall_action": "DROP",
+        "traffic_matches_firewall_rule": true,
+        "connection_failure_consistent_with_drop": true
+    }
+}
