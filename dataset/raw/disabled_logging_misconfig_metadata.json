@@ -1,0 +1,10 @@
+{
+    "scenario": "DISABLED_LOGGING_MISCONFIGURATION",
+    "ground_truth": "MISCONFIGURATION",
+    "source": "10.0.0.1",
+    "destination": "10.0.0.2",
+    "protocol": "TCP",
+    "destination_port": 8000,
+    "action": "DROP_NO_LOG",
+    "description": "A firewall rule blocks traffic but has no accompanying logging rule, meaning legitimate security events leave no audit trail \u2014 an operational misconfiguration distinct from the traffic pattern itself."
+}

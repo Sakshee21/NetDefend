@@ -55,7 +55,11 @@
 #     }
 
 import json
+from pathlib import Path
+
 import requests
+
+from agents.state_schema import NetDefendState
 
 
 # ======================================================
@@ -317,6 +321,196 @@ INCIDENT EVIDENCE:
     return json.loads(
         result["response"]
     )
+
+
+# ======================================================
+# STATE SCHEMA WRAPPER
+# ======================================================
+#
+# investigate() and SYSTEM_PROMPT above are the real agent logic and are
+# untouched by this section. Everything below just adapts them to the
+# NetDefendState contract graph.py imports: build the incident evidence
+# investigate() expects out of the pipeline state, call it, and map its
+# JSON response onto the state keys other agents/the arbiter read.
+
+_KNOWN_HYPOTHESES = {"MISCONFIGURATION", "NO_CLEAR_MISCONFIGURATION", "UNCERTAIN"}
+
+_PROTOCOL_NAMES = {1: "ICMP", 6: "TCP", 17: "UDP", 58: "ICMPv6"}
+
+# Returned when the Ollama call itself never produced a usable answer
+# (connection refused, model not pulled, malformed/non-JSON response,
+# unrecognized hypothesis value, etc.) -- NOT a genuine "probably not a
+# misconfiguration" reading. is_misconfiguration=0.0 here means "the
+# agent has no opinion", not "confidently ruled out", so this should be
+# treated as missing evidence by anything downstream, the same
+# distinction llm_call_failed makes for the Threat Hunting Agent.
+_FALLBACK_RESULT = {
+    "is_misconfiguration": 0.0,
+    "misconfig_reasoning": (
+        "Network Troubleshooting Agent could not complete its analysis -- "
+        "the Ollama call failed or returned an unusable response. This is "
+        "NOT evidence against a misconfiguration; the agent simply never "
+        "produced a real answer. See logs for the underlying error."
+    ),
+    "misconfig_hypothesis": {
+        "summary": "Troubleshooting analysis unavailable (Ollama call failed).",
+        "taxonomy_category": "OLLAMA_UNAVAILABLE",
+        "evidence": ["Ollama call failed or returned malformed JSON -- see logs."],
+    },
+}
+
+
+def _build_incident_evidence(state: NetDefendState) -> dict:
+    """Build the incident evidence dict investigate()'s prompt expects,
+    from pipeline state instead of the hardcoded incident_evidence.json
+    main() reads. Mirrors the shape agents/evidence_builder.py produces
+    (network_observation / ml_evidence / configuration_evidence /
+    log_evidence / context) so the prompt's evidence categories line up
+    with what the SYSTEM_PROMPT tells the LLM it may consider.
+
+    Known gaps, passed through honestly rather than faked:
+      - packet_features (see agents/packet_agent.py) carries only the
+        source/"top talker" IP and destination port for the selected
+        flow -- no destination-IP field is extracted yet, so none is
+        reported here.
+      - There is no structured parser yet for router/firewall/DNS/NAT
+        config out of state["log_path"] (no log-side equivalent of
+        packet_processing/feature_extractor.py). Until one exists, the
+        raw log text is passed through as-is under log_evidence so the
+        LLM can read firewall/ACL/DNS/routing/NAT lines directly,
+        instead of fabricating structured fields (firewall_rule,
+        rule_effect, ...) that nothing actually extracted.
+      - For the same reason, there's no automated correlation_evidence
+        (e.g. "traffic_matches_firewall_rule") -- the SYSTEM_PROMPT
+        already tells the LLM it may reason about correlations between
+        traffic and configuration itself from network_observation +
+        log_evidence, so this isn't required for it to do its job.
+    """
+    packet_features = state.get("packet_features") or {}
+    ml_prediction = state.get("ml_prediction") or {}
+    log_path = state.get("log_path")
+
+    protocol_raw = packet_features.get("protocol")
+    try:
+        protocol_name = _PROTOCOL_NAMES.get(int(protocol_raw), f"Protocol {protocol_raw}")
+    except (TypeError, ValueError):
+        protocol_name = None
+
+    network_observation = {
+        "flow_count": packet_features.get("flow_count"),
+        "packet_count": packet_features.get("packet_count"),
+        "byte_count": packet_features.get("byte_count"),
+        "duration_s": packet_features.get("duration_s"),
+        "packets_per_sec": packet_features.get("packets_per_sec"),
+        "bytes_per_sec": packet_features.get("bytes_per_sec"),
+        "syn_count": packet_features.get("syn_count"),
+        "synack_count": packet_features.get("synack_count"),
+        "rst_count": packet_features.get("rst_count"),
+        "protocol": protocol_name,
+        "source_ip": packet_features.get("top_talker_ip"),
+        "destination_port": packet_features.get("top_dst_port"),
+    }
+
+    ml_evidence = {
+        "random_forest": {
+            "predicted_class": ml_prediction.get("predicted_class"),
+            "attack_probability": ml_prediction.get("attack_probability"),
+        },
+        "isolation_forest": {
+            "anomaly_score": ml_prediction.get("anomaly_score"),
+        },
+    }
+
+    log_evidence = {}
+    if log_path and Path(log_path).exists():
+        raw_log = Path(log_path).read_text(encoding="utf-8", errors="replace")
+        log_evidence["raw_log_excerpt"] = raw_log[-4000:]  # bound prompt size
+    else:
+        log_evidence["note"] = f"log_path not found or not provided: {log_path!r}"
+
+    context = {
+        "source_ip": packet_features.get("top_talker_ip"),
+        "destination_port": packet_features.get("top_dst_port"),
+        "protocol": protocol_name,
+    }
+
+    return {
+        "network_observation": network_observation,
+        "ml_evidence": ml_evidence,
+        "configuration_evidence": {},
+        "log_evidence": log_evidence,
+        "context": context,
+    }
+
+
+def _hypothesis_to_score(hypothesis: str, confidence: float) -> float:
+    """Map the LLM's categorical hypothesis plus its own confidence onto
+    the single is_misconfiguration float NetDefendState expects.
+
+    - MISCONFIGURATION: the LLM's confidence already means "confidence
+      this IS a misconfiguration" -- used directly.
+    - NO_CLEAR_MISCONFIGURATION: the LLM's confidence means "confidence
+      this is NOT a misconfiguration" -- inverted, so a confident "no"
+      produces a low is_misconfiguration score.
+    - UNCERTAIN: the hypothesis itself already says the evidence didn't
+      clearly resolve either way, so this returns a fixed 0.5 rather
+      than reinterpreting the LLM's confidence field, which isn't
+      scoped to mean anything specific in this branch.
+    """
+    confidence = max(0.0, min(1.0, confidence))
+    if hypothesis == "MISCONFIGURATION":
+        return confidence
+    if hypothesis == "NO_CLEAR_MISCONFIGURATION":
+        return 1.0 - confidence
+    return 0.5  # UNCERTAIN
+
+
+def run_troubleshooting_agent(state: NetDefendState) -> dict:
+    """Propose a misconfiguration hypothesis for the same anomaly.
+
+    Args:
+        state: Current pipeline state; reads ``packet_features``,
+            ``ml_prediction``, and ``log_path``.
+
+    Returns:
+        Partial state update containing ``is_misconfiguration``,
+        ``misconfig_reasoning`` and ``misconfig_hypothesis``.
+    """
+    print("[Network Troubleshooting Agent] running...")
+
+    incident_evidence = _build_incident_evidence(state)
+
+    try:
+        llm_result = investigate(incident_evidence)
+
+        hypothesis = llm_result["hypothesis"]
+        if hypothesis not in _KNOWN_HYPOTHESES:
+            raise ValueError(f"unrecognized hypothesis value: {hypothesis!r}")
+
+        confidence = float(llm_result.get("confidence", 0.5))
+        is_misconfiguration = _hypothesis_to_score(hypothesis, confidence)
+
+        misconfig_reasoning = llm_result.get("reasoning", "")
+
+        misconfig_hypothesis = {
+            "summary": llm_result.get("problem", ""),
+            "taxonomy_category": llm_result.get("misconfiguration_type", "NONE"),
+            "evidence": llm_result.get("evidence", []),
+        }
+
+        print(f"[Network Troubleshooting Agent] hypothesis={hypothesis} "
+              f"confidence={confidence:.2f} -> "
+              f"is_misconfiguration={is_misconfiguration:.2f}")
+
+        return {
+            "is_misconfiguration": is_misconfiguration,
+            "misconfig_reasoning": misconfig_reasoning,
+            "misconfig_hypothesis": misconfig_hypothesis,
+        }
+
+    except Exception as exc:  # noqa: BLE001 -- degrade gracefully, don't crash the pipeline
+        print(f"[Network Troubleshooting Agent] Ollama call failed: {exc}")
+        return dict(_FALLBACK_RESULT)
 
 
 # ======================================================

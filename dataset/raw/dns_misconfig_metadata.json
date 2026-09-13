@@ -1,0 +1,10 @@
+{
+    "scenario": "DNS_MISCONFIGURATION",
+    "ground_truth": "MISCONFIGURATION",
+    "source": "10.0.0.1",
+    "destination": "10.0.0.2",
+    "protocol": "DNS",
+    "destination_port": 53,
+    "action": "REPEATED_QUERY_NO_CACHE",
+    "description": "A misconfigured DNS resolver on h2 fails to cache responses, causing repeated external queries for the same domain that superficially resemble a DNS tunneling exfiltration pattern."
+}

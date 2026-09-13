@@ -1,0 +1,24 @@
+Disabled Logging Misconfiguration Scenario — Firewall Counter + Log-Trail Absence Check
+Method: iptables -L INPUT -n -v counters sampled before/after traffic generation, plus dmesg/journalctl checked directly for any netfilter LOG entries matching this flow. There is no LOG rule in this scenario by design -- that absence is the misconfiguration itself.
+
+--- Checkpoint 1: Before any traffic ---
+[2026-09-13 18:35:05]
+DROP rule: pkts=0   bytes=0
+
+--- Traffic generated: 10 curl attempts from h1 to h2:8000 (2026-09-13 18:35:07 to 2026-09-13 18:35:37) ---
+
+--- Checkpoint 2: After traffic ---
+[2026-09-13 18:35:39]
+DROP rule: pkts=20   bytes=1200
+Delta: +20 packets (traffic WAS blocked)
+
+--- Log trail check (confirming NO audit trail exists for this blocked traffic) ---
+dmesg | grep -iE 'SRC=10.0.0.1|DPT=8000|ACL_BLOCK':
+    (no matching lines -- confirms no netfilter LOG entries for this flow)
+journalctl -k --no-pager -n 200 | grep -iE 'SRC=10.0.0.1|DPT=8000|ACL_BLOCK':
+    (no matching lines)
+journalctl -k raw sample (context on journal availability in this environment):
+    [0;1;39mNo journal files were found.[0m
+-- No entries --
+
+Conclusion: 20 packets were confirmed dropped above, yet zero matching log entries exist in dmesg or the kernel journal -- this is the disabled-logging misconfiguration.
