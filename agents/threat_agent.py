@@ -63,9 +63,10 @@ def run_threat_agent(state: NetDefendState) -> dict:
     packet_features = state.get("packet_features") or {}
     ml_prediction = state.get("ml_prediction") or {}
 
-    ttp_id, technique_name, tactic, mapping_method, ttp_confidence = _resolve_ttp(
-        ml_prediction, packet_features
-    )
+    (
+        ttp_id, technique_name, tactic, mapping_method, ttp_confidence,
+        llm_call_failed,
+    ) = _resolve_ttp(ml_prediction, packet_features)
 
     threat_hypothesis = _generate_hypothesis(
         packet_features=packet_features,
@@ -81,12 +82,27 @@ def run_threat_agent(state: NetDefendState) -> dict:
     return {
         "ttp_id": ttp_id,
         "ttp_confidence": ttp_confidence,
+        "ttp_mapping_method": mapping_method,
+        "llm_call_failed": llm_call_failed,
         "threat_hypothesis": threat_hypothesis,
     }
 
 
-def _resolve_ttp(ml_prediction: dict, packet_features: dict) -> tuple[str, str, str, str, float]:
-    """Deterministic lookup first; LLM fallback only if the table misses."""
+def _resolve_ttp(
+    ml_prediction: dict, packet_features: dict
+) -> tuple[str, str, str, str, float, bool]:
+    """Deterministic lookup first; LLM fallback only if the table misses.
+
+    The last element, ``llm_call_failed``, is True only when the LLM
+    fallback was actually invoked and either raised (missing key, network
+    error, API error, etc.) or came back with no usable ``ttp_id`` — NOT
+    when the deterministic table resolved it, and NOT for a genuine (if
+    low-confidence) LLM answer. Without this, a crashed LLM call and a
+    real low-confidence result both collapse into the same
+    ``mapping_method="fallback_default"``/``confidence=0.2`` output, which
+    is exactly the silent-failure ambiguity downstream eval/ablation code
+    needs to be able to tell apart.
+    """
     match = lookup_ttp(ml_prediction, packet_features)
     if match:
         return (
@@ -95,6 +111,7 @@ def _resolve_ttp(ml_prediction: dict, packet_features: dict) -> tuple[str, str, 
             match["tactic"],
             match["mapping_method"],
             match["confidence"],
+            False,
         )
 
     # LLM fallback for TTP mapping
@@ -116,9 +133,13 @@ def _resolve_ttp(ml_prediction: dict, packet_features: dict) -> tuple[str, str, 
                 parsed.get("tactic", "Unknown"),
                 "llm_fallback",
                 float(parsed.get("confidence", 0.4)),
+                False,
             )
+        print("[Threat Hunting Agent] LLM fallback call returned no usable "
+              "ttp_id — treating as a failed call, not a genuine low-"
+              "confidence result")
     except Exception as exc:  # noqa: BLE001 — degrade gracefully, don't crash the pipeline
-        print(f"[Threat Hunting Agent] LLM TTP fallback failed: {exc}")
+        print(f"[Threat Hunting Agent] LLM fallback call failed: {exc}")
 
     return (
         _FALLBACK_TTP_ID,
@@ -126,6 +147,7 @@ def _resolve_ttp(ml_prediction: dict, packet_features: dict) -> tuple[str, str, 
         "Command and Control",
         "fallback_default",
         0.2,
+        True,
     )
 
 

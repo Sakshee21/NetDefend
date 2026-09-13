@@ -24,6 +24,15 @@ class NetDefendState(TypedDict):
 
     # --- Threat Hunting Agent (attack hypothesis) -------------------------
     ttp_id: Optional[str]
+    ttp_confidence: Optional[float]
+    # "class_lookup" | "feature_heuristic" | "llm_fallback" | "fallback_default"
+    ttp_mapping_method: Optional[str]
+    # True only when the LLM fallback call was invoked and failed (raised,
+    # or returned no usable ttp_id) -- NOT set when the deterministic
+    # table resolved the TTP, and NOT set for a genuine (if low-
+    # confidence) LLM answer. Lets eval/ablation code tell "genuinely low
+    # confidence" apart from "the call never actually succeeded".
+    llm_call_failed: Optional[bool]
     # {"summary": str, "evidence": list[str]}
     threat_hypothesis: Optional[dict]
 
