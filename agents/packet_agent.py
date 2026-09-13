@@ -38,17 +38,52 @@ FEATURE_COLUMNS = [
 ]
 
 
-def _select_representative_flow(flows_df: pd.DataFrame) -> dict:
+def _select_representative_flow(flows_df: pd.DataFrame) -> tuple:
     """
     Picks ONE flow -- never averages or sums across rows, since that
-    breaks the per-flow-trained models. Uses highest packets_per_sec as
-    the most plausible candidate worth deeper ML scrutiny, since these
-    CSVs don't carry rule-based anomaly tags of their own.
+    breaks the per-flow-trained models.
+
+    Candidates are restricted to real TCP/UDP traffic first. flows_df's
+    `protocol` column is the raw IANA protocol/next-header number (see
+    packet_processing/flow_extractor.py); non-6/17 values here are
+    background noise, not attack or misconfiguration signal -- protocol
+    0 is IPv6 Hop-by-Hop (multicast listener reports), 58 is ICMPv6
+    (router solicitations). ARP has no IP layer at all and is already
+    dropped in flow_extractor.py, so no separate ARP filter is needed;
+    flows_df also has no ethertype column, only `protocol`, to filter on.
+
+    Among TCP/UDP candidates, prefers the flow with the highest SYN
+    count that got zero SYN-ACKs back -- the silent-drop signature this
+    project's ACL misconfiguration scenario is built around (see
+    mininet/scenarios/acl_misconfig.py). Falls back to the highest
+    packet_count candidate when no flow matches that signature, or (in
+    the degenerate case of a capture that is nothing but background
+    noise) to the highest packet_count flow overall.
+
+    Returns (selected_flow, reason) so the caller can log why this flow
+    was picked, not just which one.
     """
     if flows_df.empty:
-        return {}
-    idx = flows_df["packets_per_sec"].idxmax()
-    return flows_df.loc[idx].to_dict()
+        return {}, "no flows extracted"
+
+    candidates = flows_df[flows_df["protocol"].isin([6, 17])]
+    if candidates.empty:
+        idx = flows_df["packet_count"].idxmax()
+        return (
+            flows_df.loc[idx].to_dict(),
+            "fallback to highest packet count, no TCP/UDP flows found",
+        )
+
+    silent_drop = candidates[(candidates["syn_count"] > 0) & (candidates["synack_count"] == 0)]
+    if not silent_drop.empty:
+        idx = silent_drop["syn_count"].idxmax()
+        return silent_drop.loc[idx].to_dict(), "highest SYN count with no reply"
+
+    idx = candidates["packet_count"].idxmax()
+    return (
+        candidates.loc[idx].to_dict(),
+        "fallback to highest packet count, no candidate signature found",
+    )
 
 
 def run_packet_agent(state: NetDefendState) -> dict:
@@ -85,7 +120,7 @@ def run_packet_agent(state: NetDefendState) -> dict:
         print("[Packet Analysis Agent] no flows extracted, returning empty packet_features")
         return {"packet_features": {}}
 
-    selected_flow = _select_representative_flow(flows_df)
+    selected_flow, selection_reason = _select_representative_flow(flows_df)
 
     packet_features = {col: selected_flow.get(col, 0) for col in FEATURE_COLUMNS}
     packet_features["protocol"] = selected_flow.get("protocol", 0)
@@ -99,6 +134,7 @@ def run_packet_agent(state: NetDefendState) -> dict:
     print(f"[Packet Analysis Agent] selected flow: "
           f"packet_count={packet_features['packet_count']}, "
           f"syn_count={packet_features['syn_count']}, "
-          f"out of {len(flows_df)} total flows in capture")
+          f"out of {len(flows_df)} total flows in capture "
+          f"(reason: {selection_reason})")
 
     return {"packet_features": packet_features}

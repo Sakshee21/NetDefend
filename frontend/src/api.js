@@ -14,7 +14,7 @@
  * ========================================================================== */
 
 // >>> REAL API INTEGRATION: flip this to false and the app talks to FastAPI. <<<
-export const USE_MOCK_API = true
+export const USE_MOCK_API = false
 
 // The Vite dev server proxies /analyze to http://127.0.0.1:8000 (vite.config.js).
 // In production, set VITE_API_BASE_URL to the FastAPI origin.

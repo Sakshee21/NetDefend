@@ -1,0 +1,49 @@
+/* HypothesesView-specific styles. The thesis/antithesis column look
+   itself (.argument, .argument-grid, .argument-divider, ...) comes
+   straight from DialecticalDebate.css, imported alongside this file. */
+
+.hypotheses-view {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.banner-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border: 1px solid var(--uncertain-line);
+  border-radius: var(--radius);
+  background: var(--uncertain-soft);
+  color: var(--uncertain);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.argument-tag-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.llm-fail-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 3px 9px;
+  border: 1px solid var(--risk-high);
+  border-radius: 999px;
+  color: var(--risk-high);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .argument-tag-row {
+    grid-template-columns: 1fr;
+  }
+}

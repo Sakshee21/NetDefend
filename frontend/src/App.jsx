@@ -4,6 +4,7 @@ import AgentPipeline, { initialStageState, runPipelineTimeline } from './compone
 import DialecticalDebate from './components/DialecticalDebate'
 import FileUpload from './components/FileUpload'
 import HistoryList from './components/HistoryList'
+import HypothesesView from './components/HypothesesView'
 import IncidentReport from './components/IncidentReport'
 import { titleCase } from './lib/format'
 import {
@@ -41,6 +42,16 @@ const VIEW_COPY = {
     title: 'Dialectical debate',
     blurb:
       'The attack thesis and the misconfiguration antithesis, the cross-examination between them, and the arbiter ruling.',
+  },
+  // Live mode only runs the four agents with real implementations right
+  // now (see agents/graph.py's partial_app) -- the arbiter and its
+  // cross-examination/verdict don't exist yet, so this view's copy says
+  // that plainly instead of describing content that isn't there.
+  debateLive: {
+    eyebrow: 'Adjudication',
+    title: 'Competing hypotheses',
+    blurb:
+      'The attack thesis from the Threat Hunting Agent and the misconfiguration antithesis from the Network Troubleshooting Agent, shown independently — the arbiter that resolves them into one verdict is not implemented yet.',
   },
   report: {
     eyebrow: 'Output',
@@ -131,7 +142,7 @@ export default function App() {
   }, [])
 
   const pipelineStarted = Object.values(stages).some((status) => status !== 'pending')
-  const copy = VIEW_COPY[view]
+  const copy = view === 'debate' && !USE_MOCK_API ? VIEW_COPY.debateLive : VIEW_COPY[view]
 
   return (
     <div className="shell">
@@ -151,7 +162,12 @@ export default function App() {
           {VIEWS.map(({ id, label, Icon }) => {
             const disabled =
               (id === 'pipeline' && !pipelineStarted) ||
-              ((id === 'debate' || id === 'report') && !report)
+              ((id === 'debate' || id === 'report') && !report) ||
+              // IncidentReport assumes the full MOCK_REPORT shape
+              // (classification, risk_level, mitre_ttp, ...), which the
+              // real backend does not return yet -- see
+              // backend/api/analyze.py's "note" field.
+              (id === 'report' && report && !report.classification)
             return (
               <button
                 key={id}
@@ -196,7 +212,7 @@ export default function App() {
             <span>netdefend</span>
             <span className="crumb-sep">/</span>
             <strong>{VIEWS.find((entry) => entry.id === view)?.label}</strong>
-            {report && (
+            {report?.incident_id && (
               <>
                 <span className="crumb-sep">/</span>
                 <span>{report.incident_id}</span>
@@ -211,10 +227,19 @@ export default function App() {
                 Pipeline running
               </span>
             )}
-            {report && !running && (
+            {/* classification/risk_level only exist once the Arbiter and
+                Incident Response Agent are real -- see report.note in
+                live mode, populated by backend/api/analyze.py instead. */}
+            {report?.classification && !running && (
               <span className={`chip t-${report.classification.toLowerCase()}`}>
                 <span className="chip-dot" />
                 {titleCase(report.classification)} · {report.risk_level}
+              </span>
+            )}
+            {report?.note && !running && (
+              <span className="chip">
+                <span className="chip-dot" />
+                No verdict yet
               </span>
             )}
             {(report || running) && (
@@ -246,7 +271,11 @@ export default function App() {
 
             {view === 'debate' &&
               (report ? (
-                <DialecticalDebate report={report} />
+                USE_MOCK_API ? (
+                  <DialecticalDebate report={report} />
+                ) : (
+                  <HypothesesView report={report} />
+                )
               ) : (
                 <EmptyState label="Run an analysis to see the agents argue." />
               ))}
