@@ -12,6 +12,7 @@ Feeding capture-wide totals produces statistically meaningless predictions.
 This agent picks the single most notable flow instead of averaging/summing.
 """
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 import pandas as pd
@@ -86,6 +87,73 @@ def _select_representative_flow(flows_df: pd.DataFrame) -> tuple:
     )
 
 
+def _compute_cross_flow_pattern(flows: dict) -> dict:
+    """Cross-flow aggregate evidence: groups flows by (dst_ip, dst_port,
+    protocol) -- ignoring source port -- to surface repeated connection
+    attempts to the same target that no single flow's features can show
+    on their own (e.g. 10 separate blocked SYNs, each from a different
+    ephemeral source port, so each is its own 5-tuple flow with
+    syn_count~2).
+
+    Deliberately built from the raw `flows` dict extract_flows() returns
+    (keyed by the full 5-tuple, each value still carrying dst_ip/dst_port),
+    not from flows_df. calculate_features() drops dst_ip/dst_port from its
+    output entirely (see packet_processing/feature_extractor.py), so
+    flows_df alone has nothing to group by destination with. This
+    function does not touch flow_extractor.py, feature_extractor.py, or
+    _select_representative_flow() -- it's a second, independent read of
+    the same flows dict run_packet_agent() already has in hand, with no
+    effect on per-flow feature computation.
+
+    A group only counts as a "repeated attempts" pattern with at least
+    two flows -- a single flow is not a cross-flow pattern, it's just
+    the ordinary per-flow case _select_representative_flow() already
+    covers. "Close to zero" SYN-ACKs (per the spec) is treated as
+    exactly zero here, matching the same silent-drop definition
+    _select_representative_flow() already uses, rather than introducing
+    a separate fuzzy threshold.
+
+    Returns the exact shape documented on NetDefendState's
+    cross_flow_pattern field.
+    """
+    groups = defaultdict(list)
+    for flow in flows.values():
+        key = (flow["dst_ip"], flow["dst_port"], flow["protocol"])
+        groups[key].append(flow)
+
+    candidates = []
+    for (dst_ip, dst_port, _protocol), group in groups.items():
+        if len(group) < 2:
+            continue
+        total_syn = sum(f["syn_count"] for f in group)
+        total_synack = sum(f["synack_count"] for f in group)
+        if total_syn > 0 and total_synack == 0:
+            candidates.append((total_syn, dst_ip, dst_port, total_synack, group))
+
+    if not candidates:
+        return {
+            "destination": {"ip": None, "port": None},
+            "flow_count": 0,
+            "total_syn_count": 0,
+            "total_synack_count": 0,
+            "time_span_s": 0.0,
+            "pattern": "none_detected",
+        }
+
+    total_syn, dst_ip, dst_port, total_synack, group = max(candidates, key=lambda c: c[0])
+    earliest = min(f["first_timestamp"] for f in group)
+    latest = max(f["last_timestamp"] for f in group)
+
+    return {
+        "destination": {"ip": dst_ip, "port": int(dst_port)},
+        "flow_count": len(group),
+        "total_syn_count": int(total_syn),
+        "total_synack_count": int(total_synack),
+        "time_span_s": max(latest - earliest, 0.0),
+        "pattern": "repeated_blocked_attempts",
+    }
+
+
 def run_packet_agent(state: NetDefendState) -> dict:
     """Extract flow-level features from the capture and select one flow.
 
@@ -94,14 +162,19 @@ def run_packet_agent(state: NetDefendState) -> dict:
 
     Returns:
         Partial state update containing ``packet_features`` -- ONE flow's
-        feature dict, not an aggregate across the capture.
+        feature dict, not an aggregate across the capture -- and
+        ``cross_flow_pattern``, separate aggregate evidence computed
+        across ALL flows (see _compute_cross_flow_pattern()). The two
+        are deliberately kept apart: packet_features is what the
+        Intrusion Detection Agent's per-flow-trained ML models score,
+        cross_flow_pattern never reaches those models at all.
     """
     print("[Packet Analysis Agent] running...")
 
     pcap_path = state.get("pcap_path")
     if not pcap_path or not Path(pcap_path).exists():
         print(f"[Packet Analysis Agent] pcap_path missing or not found: {pcap_path}")
-        return {"packet_features": {}}
+        return {"packet_features": {}, "cross_flow_pattern": _compute_cross_flow_pattern({})}
 
     print("[Packet Analysis Agent] reading PCAP...")
     packets = rdpcap(pcap_path)
@@ -111,6 +184,13 @@ def run_packet_agent(state: NetDefendState) -> dict:
     flows = extract_flows(packets)
     print(f"[Packet Analysis Agent] flows found: {len(flows)}")
 
+    cross_flow_pattern = _compute_cross_flow_pattern(flows)
+    print(f"[Packet Analysis Agent] cross-flow pattern: {cross_flow_pattern['pattern']} "
+          f"(flow_count={cross_flow_pattern['flow_count']}, "
+          f"total_syn_count={cross_flow_pattern['total_syn_count']}, "
+          f"total_synack_count={cross_flow_pattern['total_synack_count']}, "
+          f"time_span_s={cross_flow_pattern['time_span_s']:.2f})")
+
     print("[Packet Analysis Agent] calculating features...")
     features = calculate_features(flows)
     flows_df = pd.DataFrame(features)
@@ -118,7 +198,7 @@ def run_packet_agent(state: NetDefendState) -> dict:
 
     if flows_df.empty:
         print("[Packet Analysis Agent] no flows extracted, returning empty packet_features")
-        return {"packet_features": {}}
+        return {"packet_features": {}, "cross_flow_pattern": cross_flow_pattern}
 
     selected_flow, selection_reason = _select_representative_flow(flows_df)
 
@@ -137,4 +217,4 @@ def run_packet_agent(state: NetDefendState) -> dict:
           f"out of {len(flows_df)} total flows in capture "
           f"(reason: {selection_reason})")
 
-    return {"packet_features": packet_features}
+    return {"packet_features": packet_features, "cross_flow_pattern": cross_flow_pattern}

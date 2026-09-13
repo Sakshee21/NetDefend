@@ -62,15 +62,21 @@ def run_threat_agent(state: NetDefendState) -> dict:
 
     packet_features = state.get("packet_features") or {}
     ml_prediction = state.get("ml_prediction") or {}
+    # Aggregate evidence across ALL flows (see agents/packet_agent.py) --
+    # never fed to the ML models, but real evidence for the LLM: e.g. 10
+    # blocked SYNs to the same destination across separate flows, a
+    # pattern packet_features alone (one representative flow) can't show.
+    cross_flow_pattern = state.get("cross_flow_pattern") or {}
 
     (
         ttp_id, technique_name, tactic, mapping_method, ttp_confidence,
         llm_call_failed,
-    ) = _resolve_ttp(ml_prediction, packet_features)
+    ) = _resolve_ttp(ml_prediction, packet_features, cross_flow_pattern)
 
     threat_hypothesis = _generate_hypothesis(
         packet_features=packet_features,
         ml_prediction=ml_prediction,
+        cross_flow_pattern=cross_flow_pattern,
         ttp_id=ttp_id,
         technique_name=technique_name,
         tactic=tactic,
@@ -89,7 +95,7 @@ def run_threat_agent(state: NetDefendState) -> dict:
 
 
 def _resolve_ttp(
-    ml_prediction: dict, packet_features: dict
+    ml_prediction: dict, packet_features: dict, cross_flow_pattern: dict
 ) -> tuple[str, str, str, str, float, bool]:
     """Deterministic lookup first; LLM fallback only if the table misses.
 
@@ -114,8 +120,10 @@ def _resolve_ttp(
             False,
         )
 
-    # LLM fallback for TTP mapping
-    prompt = _build_ttp_fallback_prompt(ml_prediction, packet_features)
+    # LLM fallback for TTP mapping. lookup_ttp() above (the deterministic
+    # table) keeps its existing fixed contract untouched -- cross_flow_pattern
+    # only reaches the LLM path, not the table.
+    prompt = _build_ttp_fallback_prompt(ml_prediction, packet_features, cross_flow_pattern)
     try:
         raw = call_llm(
             prompt,
@@ -151,18 +159,23 @@ def _resolve_ttp(
     )
 
 
-def _build_ttp_fallback_prompt(ml_prediction: dict, packet_features: dict) -> str:
+def _build_ttp_fallback_prompt(
+    ml_prediction: dict, packet_features: dict, cross_flow_pattern: dict
+) -> str:
     return (
         "No deterministic ATT&CK mapping matched the following data. "
         "Identify the single most likely technique.\n\n"
         f"ML prediction: {json.dumps(ml_prediction)}\n"
-        f"Packet features: {json.dumps(packet_features)}"
+        f"Packet features (single representative flow): {json.dumps(packet_features)}\n"
+        "Cross-flow pattern (aggregate evidence across every flow in the "
+        f"capture, not just the representative flow above): {json.dumps(cross_flow_pattern)}"
     )
 
 
 def _generate_hypothesis(
     packet_features: dict,
     ml_prediction: dict,
+    cross_flow_pattern: dict,
     ttp_id: str,
     technique_name: str,
     tactic: str,
@@ -170,7 +183,9 @@ def _generate_hypothesis(
     prompt = (
         f"MITRE ATT&CK technique: {ttp_id} ({technique_name}), tactic: {tactic}\n\n"
         f"ML prediction: {json.dumps(ml_prediction)}\n"
-        f"Packet features: {json.dumps(packet_features)}"
+        f"Packet features (single representative flow): {json.dumps(packet_features)}\n"
+        "Cross-flow pattern (aggregate evidence across every flow in the "
+        f"capture, not just the representative flow above): {json.dumps(cross_flow_pattern)}"
     )
     try:
         raw = call_llm(prompt, system=HYPOTHESIS_SYSTEM_PROMPT)

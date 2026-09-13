@@ -385,9 +385,17 @@ def _build_incident_evidence(state: NetDefendState) -> dict:
         already tells the LLM it may reason about correlations between
         traffic and configuration itself from network_observation +
         log_evidence, so this isn't required for it to do its job.
+
+    cross_flow_evidence is new: aggregate evidence across every flow in
+    the capture (see agents/packet_agent.py's _compute_cross_flow_pattern()),
+    kept as its own top-level key rather than folded into
+    network_observation so it stays visibly distinct from that single
+    representative flow's numbers -- e.g. "10 blocked SYNs to the same
+    destination across 10 separate flows" versus "this one flow saw 2".
     """
     packet_features = state.get("packet_features") or {}
     ml_prediction = state.get("ml_prediction") or {}
+    cross_flow_pattern = state.get("cross_flow_pattern") or {}
     log_path = state.get("log_path")
 
     protocol_raw = packet_features.get("protocol")
@@ -436,6 +444,7 @@ def _build_incident_evidence(state: NetDefendState) -> dict:
 
     return {
         "network_observation": network_observation,
+        "cross_flow_evidence": cross_flow_pattern,
         "ml_evidence": ml_evidence,
         "configuration_evidence": {},
         "log_evidence": log_evidence,

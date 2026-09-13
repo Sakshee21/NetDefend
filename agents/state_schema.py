@@ -17,6 +17,19 @@ class NetDefendState(TypedDict):
 
     # --- Packet Analysis Agent -------------------------------------------
     packet_features: Optional[dict]
+    # Cross-flow aggregate evidence -- groups ALL flows in the capture by
+    # (destination IP, destination port, protocol), ignoring source port,
+    # to surface repeated connection attempts to the same target that no
+    # single flow's packet_features can show (e.g. 10 blocked SYNs, each
+    # from a different ephemeral source port, so each is its own flow).
+    # Never fed into the Intrusion Detection Agent's ML models -- those
+    # stay strictly per-flow. See agents/packet_agent.py's
+    # _compute_cross_flow_pattern().
+    # {"destination": {"ip": str|None, "port": int|None}, "flow_count": int,
+    #  "total_syn_count": int, "total_synack_count": int,
+    #  "time_span_s": float,
+    #  "pattern": "repeated_blocked_attempts" | "none_detected"}
+    cross_flow_pattern: Optional[dict]
 
     # --- Intrusion Detection Agent ---------------------------------------
     # {"attack_probability": float, "predicted_class": str}
