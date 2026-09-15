@@ -43,16 +43,40 @@ git lfs install
 > If you already cloned without it, run `git lfs pull` afterward to fetch
 > the real files.
 
-**Ollama** (required for the Network Troubleshooting Agent)
+**Ollama** (required for the Network Troubleshooting Agent) — three steps,
+all three required, not just the install:
+
 ```bash
+# 1. Install
 curl -fsSL https://ollama.com/install.sh | sh
+
+# 2. Start the server — leave this running in its own terminal tab/window
+ollama serve
+
+# 3. In a DIFFERENT terminal, pull the exact model this project uses
 ollama pull qwen2.5:7b
 ```
-> The Troubleshooting Agent calls a local Ollama model, not Groq — see
+
+> **This is the single most common setup failure, so read this carefully.**
+> Installing Ollama does **not** start it. On native Ubuntu with systemd,
+> `ollama serve` may already be running as a background service — but on
+> WSL (no systemd by default) it is never auto-started, and step 3 above
+> (`ollama pull`) will itself fail with "could not connect" if step 2 isn't
+> already running in another window. Keep `ollama serve` running the whole
+> time you're using this project, the same way you'll later keep `uvicorn`
+> and `npm run dev` running in their own terminals.
+>
+> The model name matters too: it must be **exactly** `qwen2.5:7b`, matching
+> `MODEL` in `agents/troubleshooting_agent.py:71`. If you ever change one,
+> change the other — a mismatch fails with "model not found", not a
+> connection error, so it looks like a different problem.
+>
+> The Troubleshooting Agent calls this local Ollama model, not Groq — see
 > **LLM setup** below for why the two agents use different providers.
 > Without Ollama running, that agent still returns a real, honestly-labeled
-> result (`taxonomy_category: "OLLAMA_UNAVAILABLE"`), it just won't be a
-> real analysis.
+> result (`taxonomy_category: "OLLAMA_UNAVAILABLE"`) rather than crashing,
+> it just won't be a real analysis — so if you see that value, it almost
+> always means `ollama serve` isn't running.
 
 ---
 
@@ -117,9 +141,14 @@ sudo mn --test pingall
 # Confirm Groq is reachable with your key
 python3 -c "from agents.llm_client import call_llm; print(call_llm('Reply with exactly: OK'))"
 
-# Confirm Ollama is running and the model is pulled
-curl -s http://localhost:11434/api/tags | grep qwen2.5
+# Confirm Ollama is running and the exact model is pulled
+curl -s http://localhost:11434/api/tags | grep qwen2.5:7b
 ```
+
+> **If that last command prints nothing:** either `ollama serve` isn't
+> running (start it in its own terminal — see Prerequisites), or the model
+> was pulled under a different name/tag than `qwen2.5:7b`. Run
+> `ollama list` to see what's actually there.
 
 ---
 
