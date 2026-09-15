@@ -433,8 +433,11 @@ def _build_incident_evidence(state: NetDefendState) -> dict:
     if log_path and Path(log_path).exists():
         raw_log = Path(log_path).read_text(encoding="utf-8", errors="replace")
         log_evidence["raw_log_excerpt"] = raw_log[-4000:]  # bound prompt size
+        print(f"[Network Troubleshooting Agent] log evidence loaded from "
+              f"{log_path} ({len(raw_log)} bytes)")
     else:
         log_evidence["note"] = f"log_path not found or not provided: {log_path!r}"
+        print(f"[Network Troubleshooting Agent] WARNING: log_path not found: {log_path!r}")
 
     context = {
         "source_ip": packet_features.get("top_talker_ip"),

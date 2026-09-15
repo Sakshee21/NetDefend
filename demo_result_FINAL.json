@@ -1,0 +1,135 @@
+/home/sakshee/NetDefend/venv/lib/python3.10/site-packages/scapy/layers/ipsec.py:512: CryptographyDeprecationWarning: TripleDES has been moved to cryptography.hazmat.decrepit.ciphers.algorithms.TripleDES and will be removed from cryptography.hazmat.primitives.ciphers.algorithms in 48.0.0.
+  cipher=algorithms.TripleDES,
+/home/sakshee/NetDefend/venv/lib/python3.10/site-packages/scapy/layers/ipsec.py:516: CryptographyDeprecationWarning: TripleDES has been moved to cryptography.hazmat.decrepit.ciphers.algorithms.TripleDES and will be removed from cryptography.hazmat.primitives.ciphers.algorithms in 48.0.0.
+  cipher=algorithms.TripleDES,
+/home/sakshee/NetDefend/venv/lib/python3.10/site-packages/sklearn/base.py:442: InconsistentVersionWarning: Trying to unpickle estimator DecisionTreeClassifier from version 1.6.1 when using version 1.7.2. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+  warnings.warn(
+/home/sakshee/NetDefend/venv/lib/python3.10/site-packages/sklearn/base.py:442: InconsistentVersionWarning: Trying to unpickle estimator RandomForestClassifier from version 1.6.1 when using version 1.7.2. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+  warnings.warn(
+/home/sakshee/NetDefend/venv/lib/python3.10/site-packages/sklearn/base.py:442: InconsistentVersionWarning: Trying to unpickle estimator LabelEncoder from version 1.6.1 when using version 1.7.2. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+  warnings.warn(
+/home/sakshee/NetDefend/venv/lib/python3.10/site-packages/sklearn/base.py:442: InconsistentVersionWarning: Trying to unpickle estimator ExtraTreeRegressor from version 1.6.1 when using version 1.7.2. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+  warnings.warn(
+/home/sakshee/NetDefend/venv/lib/python3.10/site-packages/sklearn/base.py:442: InconsistentVersionWarning: Trying to unpickle estimator IsolationForest from version 1.6.1 when using version 1.7.2. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+  warnings.warn(
+/home/sakshee/NetDefend/venv/lib/python3.10/site-packages/sklearn/base.py:442: InconsistentVersionWarning: Trying to unpickle estimator StandardScaler from version 1.6.1 when using version 1.7.2. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+  warnings.warn(
+[Packet Analysis Agent] running...
+[Packet Analysis Agent] reading PCAP...
+[Packet Analysis Agent] packets found: 40
+[Packet Analysis Agent] extracting flows...
+[Packet Analysis Agent] flows found: 16
+[Packet Analysis Agent] cross-flow pattern: repeated_blocked_attempts (flow_count=10, total_syn_count=20, total_synack_count=0, time_span_s=28.19)
+[Packet Analysis Agent] calculating features...
+[Packet Analysis Agent] selected flow: packet_count=2.0, syn_count=2.0, out of 16 total flows in capture (reason: highest SYN count with no reply)
+[Intrusion Detection Agent] running...
+[Intrusion Detection Agent] predicted_class=Benign, attack_probability=0.11, anomaly_score=0.11688737135048644
+[Threat Hunting Agent] running...
+[Network Troubleshooting Agent] running...
+[DIAGNOSTIC] repr(log_path) = 'dataset/raw/acl_misconfig_firewall.log'
+[DIAGNOSTIC] os.getcwd() = '/home/sakshee/NetDefend'
+[DIAGNOSTIC] Path(log_path).exists() = True
+[Network Troubleshooting Agent] log evidence loaded from dataset/raw/acl_misconfig_firewall.log (588 bytes)
+[Threat Hunting Agent] mapped to T1046 via llm_fallback (confidence=0.78)
+[Network Troubleshooting Agent] hypothesis=MISCONFIGURATION confidence=0.70 -> is_misconfiguration=0.70
+[Dialectical Arbiter] running...
+[Dialectical Arbiter] verdict: ATTACK (threat summary present: True, misconfig summary present: True)
+[Incident Response Agent] running...
+{
+  "pcap_path": "dataset/raw/acl_misconfig.pcap",
+  "log_path": "dataset/raw/acl_misconfig_firewall.log",
+  "packet_features": {
+    "packet_count": 2.0,
+    "byte_count": 148.0,
+    "duration_s": 1.0203659534454346,
+    "packets_per_sec": 1.960081079975933,
+    "bytes_per_sec": 145.04599991821905,
+    "mean_inter_arrival": 1.0203659534454346,
+    "std_inter_arrival": 0.0,
+    "syn_count": 2.0,
+    "synack_count": 0.0,
+    "rst_count": 0.0,
+    "ssh_auth_attempts": 0.0,
+    "protocol": 6.0,
+    "flow_count": 16,
+    "top_talker_ip": null,
+    "top_dst_port": null
+  },
+  "cross_flow_pattern": {
+    "destination": {
+      "ip": "10.0.0.2",
+      "port": 8000
+    },
+    "flow_count": 10,
+    "total_syn_count": 20,
+    "total_synack_count": 0,
+    "time_span_s": 28.188441038131714,
+    "pattern": "repeated_blocked_attempts"
+  },
+  "ml_prediction": {
+    "attack_probability": 0.11333333333333329,
+    "predicted_class": "Benign",
+    "anomaly_score": 0.11688737135048644
+  },
+  "ttp_id": "T1046",
+  "ttp_confidence": 0.78,
+  "ttp_mapping_method": "llm_fallback",
+  "llm_call_failed": false,
+  "threat_hypothesis": {
+    "summary": "The traffic shows repeated SYN attempts to port 8000 on 10.0.0.2, matching a network service scanning activity (T1046) during the reconnaissance phase.",
+    "evidence": [
+      "Cross\u2011flow data shows 10 flows targeting destination IP 10.0.0.2 port 8000",
+      "Across those flows, total SYN count is 20 and total SYN\u2011ACK count is 0",
+      "The pattern is labeled \"repeated_blocked_attempts\" spanning 28.188441038131714 seconds",
+      "The representative flow has packet_count 2.0 with syn_count 2.0 and synack_count 0.0",
+      "The flow duration is 1.0203659534454346 seconds with packets_per_sec 1.960081079975933",
+      "ML prediction classified the flow as Benign with attack_probability 0.11333333333333329"
+    ]
+  },
+  "is_misconfiguration": 0.7,
+  "misconfig_reasoning": "The repeated blocked SYN attempts are expected to result in either a SYN-ACK from the server or a RST from the client. The absence of these responses, coupled with the high packet count and the misconfiguration in the firewall rule (both LOG and DROP rules showing non-zero counts), strongly suggests a firewall rule that is incorrectly configured to drop SYN packets without logging them, leading to a misdirected or misinterpreted incident.",
+  "misconfig_hypothesis": {
+    "summary": "Repeated blocked TCP SYN attempts to port 8000 with a high packet count, but no corresponding SYN-ACK or RST packets observed.",
+    "taxonomy_category": "ACL_FIREWALL",
+    "evidence": [
+      "Repeated blocked TCP SYN attempts to port 8000 with a high packet count, but no corresponding SYN-ACK or RST packets observed.",
+      "ML evidence suggests the traffic is benign, with a low attack probability.",
+      "Log evidence shows a misconfiguration in the firewall rule, with both LOG and DROP rules showing non-zero packet counts after traffic generation, indicating incorrect handling of SYN packets."
+    ]
+  },
+  "refutation_exchange": [
+    {
+      "challenged_agent": "threat_hunting",
+      "challenge": "If this were lateral movement, why did the source host make no attempt to authenticate after the 12 handshakes it did complete? A denied ACL explains the silence just as well.",
+      "response": "The 34 RSTs rule out a silent deny rule, and the sweep covers hosts the source has never contacted before. That fan-out is discovery behaviour, not a retry loop."
+    },
+    {
+      "challenged_agent": "troubleshooting",
+      "challenge": "If an ACL deny rule were responsible, every host on the subnet would fail identically. Why did 12 connections succeed?",
+      "response": "A partially applied rule could explain that, but no ACL change appears in the router log window. This hypothesis does not survive the challenge."
+    }
+  ],
+  "arbiter_verdict": {
+    "classification": "ATTACK",
+    "confidence": 0.81
+  },
+  "final_report": {
+    "incident_id": "INC-EF32DAA8",
+    "classification": "ATTACK",
+    "risk_level": "HIGH",
+    "confidence": 0.81,
+    "mitre_ttp": {
+      "id": "T1046",
+      "name": "Unknown"
+    },
+    "recommended_action": "Isolate 10.0.0.14 from the access VLAN and revoke the cached credentials it used. Review SMB session logs on the 12 hosts that completed a handshake.",
+    "affected_host": null,
+    "timestamp": "2026-09-15T16:23:47.937919+00:00"
+  }
+}
