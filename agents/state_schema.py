@@ -56,9 +56,15 @@ class NetDefendState(TypedDict):
     misconfig_hypothesis: Optional[dict]
 
     # --- Dialectical Arbiter ---------------------------------------------
-    # list of {"challenged_agent": str, "challenge": str, "response": str}
+    # list of {"challenged_agent": "threat_hunting" | "troubleshooting",
+    #          "challenge": str, "response": str} -- the real generated
+    # refutation exchange (see agents/arbiter.py).
     refutation_exchange: Optional[list]
-    # {"classification": str, "confidence": float}
+    # {"classification": "ATTACK" | "MISCONFIGURATION" | "UNCERTAIN",
+    #  "confidence": float, "reasoning": str,
+    #  "escalation": str (present only when classification is UNCERTAIN)}.
+    # reasoning begins with the sentinel "fallback rule used ..." when the
+    # adversarial LLM exchange could not complete and a rule decided instead.
     arbiter_verdict: Optional[dict]
 
     # --- Incident Response Agent -----------------------------------------

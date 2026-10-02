@@ -1,14 +1,13 @@
-"""POST /analyze -- runs the real four-agent pipeline on an uploaded
-PCAP + log file and returns their real output.
+"""POST /analyze -- runs the real NetDefend pipeline on an uploaded
+PCAP + log file and returns its output.
 
-Scoped to exactly what's implemented right now: Packet Analysis,
-Intrusion Detection, Threat Hunting, and Network Troubleshooting. The
-Dialectical Arbiter and Incident Response Agent are still stubs (see
-agents/arbiter.py, agents/response_agent.py) -- this deliberately never
-touches final_report or arbiter_verdict, so their fabricated,
-disconnected content can never reach a response from this endpoint.
-Runs agents.graph.partial_app (the graph that stops right after the two
-hypothesis agents) rather than the full app, for the same reason.
+Runs the full agents.graph.app now that the Dialectical Arbiter is real
+(see agents/arbiter.py): the response surfaces the two competing
+hypotheses, the real refutation exchange between them, and the arbiter's
+adjudicated verdict. The only remaining stub is the Incident Response
+Agent (agents/response_agent.py), whose risk_level / recommended_action
+are still placeholder, so this endpoint deliberately does NOT surface
+final_report -- see the ``note`` field in the response.
 """
 import tempfile
 from pathlib import Path
@@ -16,18 +15,18 @@ from typing import Optional
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
-from agents.graph import partial_app
+from agents.graph import app as pipeline_app
 
 router = APIRouter()
 
 
 # Plain `def`, not `async def`: FastAPI runs sync path operations in a
 # worker thread automatically, which matters here because
-# partial_app.invoke() below is a blocking call that can run for many
-# seconds (real LLM calls to Groq) -- an async def would block
-# the whole event loop, and every other request, for that entire time.
-# UploadFile.file is a plain synchronous file-like object, so no `await`
-# is needed to read it in this style.
+# pipeline_app.invoke() below is a blocking call that can run for tens of
+# seconds (many real LLM calls to Groq, including the arbiter's four) --
+# an async def would block the whole event loop, and every other request,
+# for that entire time. UploadFile.file is a plain synchronous file-like
+# object, so no `await` is needed to read it in this style.
 @router.post("/analyze")
 def analyze(
     pcap: UploadFile = File(...),
@@ -35,9 +34,9 @@ def analyze(
     firewall_log: Optional[UploadFile] = File(None),
 ):
     """Save the uploaded files, run the real pipeline, and shape its
-    output into the two-independent-hypotheses response the frontend's
-    partial view (see frontend/src/components/HypothesesView.jsx)
-    expects.
+    output into the response the frontend's HypothesesView renders (see
+    frontend/src/components/HypothesesView.jsx): the two hypotheses, the
+    refutation exchange, and the arbiter's verdict.
     """
     # NetDefendState carries a single log_path, not one per log type (see
     # agents/state_schema.py) -- only one log file reaches the pipeline
@@ -86,7 +85,7 @@ def analyze(
             # The pipeline reads these files from disk while still inside
             # the TemporaryDirectory context, so invoke() must happen
             # before the directory (and the files in it) get cleaned up.
-            result = partial_app.invoke({
+            result = pipeline_app.invoke({
                 "pcap_path": str(pcap_path),
                 "log_path": log_path,
             })
@@ -122,9 +121,16 @@ def analyze(
             "taxonomy_category": misconfig_hypothesis.get("taxonomy_category"),
             "evidence": misconfig_hypothesis.get("evidence", []),
         },
+        # Real arbiter output, surfaced verbatim from the pipeline state.
+        # refutation_exchange: list of
+        #   {challenged_agent, challenge, response}
+        # arbiter_verdict: {classification, confidence, reasoning,
+        #   escalation? (only when UNCERTAIN)}.
+        "refutation_exchange": result.get("refutation_exchange", []),
+        "arbiter_verdict": result.get("arbiter_verdict"),
         "note": (
-            "Dialectical Arbiter and Incident Response Agent are not yet "
-            "implemented — this response shows the two competing "
-            "hypotheses independently, not a resolved final verdict."
+            "Verdict and refutation are the real Dialectical Arbiter output. "
+            "The Incident Response Agent is still a stub, so risk level and "
+            "recommended action are not shown yet."
         ),
     }

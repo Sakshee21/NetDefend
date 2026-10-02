@@ -42,6 +42,54 @@
   white-space: nowrap;
 }
 
+/* --- Arbiter verdict extras (verdict panel itself is from
+   DialecticalDebate.css; these are the flags/escalation the real
+   arbiter_verdict adds on top). ------------------------------------- */
+
+.verdict-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.verdict-flags:empty {
+  display: none;
+}
+
+.verdict-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Colour these independently of the verdict tone -- a fallback or an
+   escalation is a caution regardless of the classification colour. */
+.verdict-flag.is-fallback {
+  color: var(--risk-high);
+}
+
+.verdict-flag.is-escalated {
+  color: var(--uncertain);
+}
+
+.verdict-escalation {
+  max-width: 54ch;
+  padding: 10px 12px;
+  border-left: 2px solid var(--uncertain);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--uncertain-soft);
+  color: var(--text-dim);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
 @media (max-width: 900px) {
   .argument-tag-row {
     grid-template-columns: 1fr;

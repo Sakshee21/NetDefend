@@ -43,15 +43,14 @@ const VIEW_COPY = {
     blurb:
       'The attack thesis and the misconfiguration antithesis, the cross-examination between them, and the arbiter ruling.',
   },
-  // Live mode only runs the four agents with real implementations right
-  // now (see agents/graph.py's partial_app) -- the arbiter and its
-  // cross-examination/verdict don't exist yet, so this view's copy says
-  // that plainly instead of describing content that isn't there.
+  // Live mode now runs the real Dialectical Arbiter (agents/arbiter.py):
+  // the two hypotheses, the genuine refutation exchange, and an
+  // adjudicated verdict. Only the Incident Response Agent is still a stub.
   debateLive: {
     eyebrow: 'Adjudication',
-    title: 'Competing hypotheses',
+    title: 'Dialectical resolution',
     blurb:
-      'The attack thesis from the Threat Hunting Agent and the misconfiguration antithesis from the Network Troubleshooting Agent, shown independently — the arbiter that resolves them into one verdict is not implemented yet.',
+      'The attack thesis and the misconfiguration antithesis, the arbiter’s cross-examination of each, and its adjudicated verdict.',
   },
   report: {
     eyebrow: 'Output',
@@ -227,21 +226,22 @@ export default function App() {
                 Pipeline running
               </span>
             )}
-            {/* classification/risk_level only exist once the Arbiter and
-                Incident Response Agent are real -- see report.note in
-                live mode, populated by backend/api/analyze.py instead. */}
-            {report?.classification && !running && (
-              <span className={`chip t-${report.classification.toLowerCase()}`}>
-                <span className="chip-dot" />
-                {titleCase(report.classification)} · {report.risk_level}
-              </span>
-            )}
-            {report?.note && !running && (
-              <span className="chip">
-                <span className="chip-dot" />
-                No verdict yet
-              </span>
-            )}
+            {/* Verdict comes from report.classification in the mock shape,
+                or report.arbiter_verdict.classification in the real
+                backend shape. risk_level only exists in the mock (the
+                Incident Response Agent is still a stub). */}
+            {(() => {
+              const classification =
+                report?.classification ?? report?.arbiter_verdict?.classification
+              if (!classification || running) return null
+              return (
+                <span className={`chip t-${classification.toLowerCase()}`}>
+                  <span className="chip-dot" />
+                  {titleCase(classification)}
+                  {report?.risk_level ? ` · ${report.risk_level}` : ''}
+                </span>
+              )
+            })()}
             {(report || running) && (
               <button type="button" className="btn btn-ghost btn-sm" onClick={startNew}>
                 New analysis
