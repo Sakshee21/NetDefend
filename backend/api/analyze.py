@@ -24,7 +24,7 @@ router = APIRouter()
 # Plain `def`, not `async def`: FastAPI runs sync path operations in a
 # worker thread automatically, which matters here because
 # partial_app.invoke() below is a blocking call that can run for many
-# seconds (real LLM calls to Groq/Ollama) -- an async def would block
+# seconds (real LLM calls to Groq) -- an async def would block
 # the whole event loop, and every other request, for that entire time.
 # UploadFile.file is a plain synchronous file-like object, so no `await`
 # is needed to read it in this style.
@@ -108,7 +108,7 @@ def analyze(
             "ttp_id": result.get("ttp_id"),
             "confidence": result.get("ttp_confidence"),
             "mapping_method": result.get("ttp_mapping_method"),
-            # If Ollama/Groq are unreachable, this flows through as True
+            # If Groq is unreachable, this flows through as True
             # honestly -- it is NOT hidden or swapped for fake-confident
             # output. See agents/threat_agent.py's _resolve_ttp().
             "llm_call_failed": result.get("llm_call_failed", False),

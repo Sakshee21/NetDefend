@@ -43,40 +43,9 @@ git lfs install
 > If you already cloned without it, run `git lfs pull` afterward to fetch
 > the real files.
 
-**Ollama** (required for the Network Troubleshooting Agent) — three steps,
-all three required, not just the install:
-
-```bash
-# 1. Install
-curl -fsSL https://ollama.com/install.sh | sh
-
-# 2. Start the server — leave this running in its own terminal tab/window
-ollama serve
-
-# 3. In a DIFFERENT terminal, pull the exact model this project uses
-ollama pull qwen2.5:7b
-```
-
-> **This is the single most common setup failure, so read this carefully.**
-> Installing Ollama does **not** start it. On native Ubuntu with systemd,
-> `ollama serve` may already be running as a background service — but on
-> WSL (no systemd by default) it is never auto-started, and step 3 above
-> (`ollama pull`) will itself fail with "could not connect" if step 2 isn't
-> already running in another window. Keep `ollama serve` running the whole
-> time you're using this project, the same way you'll later keep `uvicorn`
-> and `npm run dev` running in their own terminals.
->
-> The model name matters too: it must be **exactly** `qwen2.5:7b`, matching
-> `MODEL` in `agents/troubleshooting_agent.py:71`. If you ever change one,
-> change the other — a mismatch fails with "model not found", not a
-> connection error, so it looks like a different problem.
->
-> The Troubleshooting Agent calls this local Ollama model, not Groq — see
-> **LLM setup** below for why the two agents use different providers.
-> Without Ollama running, that agent still returns a real, honestly-labeled
-> result (`taxonomy_category: "OLLAMA_UNAVAILABLE"`) rather than crashing,
-> it just won't be a real analysis — so if you see that value, it almost
-> always means `ollama serve` isn't running.
+> **No local LLM server is needed.** Both LLM-backed agents call Groq's cloud
+> API, so the only thing to set up for them is a free Groq API key — see step
+> 4 of **Setup Instructions** below.
 
 ---
 
@@ -116,18 +85,25 @@ GROQ_API_KEY=your_key_here
 ```
 
 > Get a free API key at [console.groq.com](https://console.groq.com/keys).
-> **LLM setup, split across two agents, on purpose:** the Threat Hunting
-> Agent (`agents/llm_client.py`) calls Groq — open-weight models, not a
-> proprietary API, per the reproducibility constraint in `CLAUDE.md`. The
-> Network Troubleshooting Agent (`agents/troubleshooting_agent.py`) calls a
-> **local Ollama** model instead (`qwen2.5:7b`, see Prerequisites above),
-> so you need both a Groq key *and* Ollama running for both agents to
-> produce real output.
+> That one key is all the LLM access you need: both the Threat Hunting
+> Agent and the Network Troubleshooting Agent call Groq through the shared
+> `agents/llm_client.py` — open-weight models, not a proprietary API, per
+> the reproducibility constraint in `CLAUDE.md`. No local model server is
+> required.
 >
-> `MODEL_NAME_HEAVY`/`MODEL_NAME_LIGHT` in `.env.example` are Groq model
-> IDs. Groq's catalog moves fast — if `openai/gpt-oss-120b` ever 404s,
-> run `python3 -c "from groq import Groq; [print(m.id) for m in Groq().models.list().data]"`
-> to see what's currently available on your key and update `.env`.
+> The two agents use different models from `.env`: the Threat Hunting Agent
+> uses `MODEL_NAME_HEAVY` (`openai/gpt-oss-120b`) and the Troubleshooting
+> Agent uses `MODEL_NAME_LIGHT` (`openai/gpt-oss-20b`). The Troubleshooting
+> Agent deliberately uses the smaller model: on its JSON-only prompt, the
+> 120b model intermittently produced invalid JSON, while the 20b model did
+> not.
+>
+> Groq's catalog moves fast — if either model ever 404s, run
+> `python3 -c "from groq import Groq; [print(m.id) for m in Groq().models.list().data]"`
+> to see what's currently available on your key and update `.env`. If
+> Groq can't be reached at all, the Troubleshooting Agent still returns an
+> honestly-labeled result (`taxonomy_category: "LLM_UNAVAILABLE"`) rather
+> than crashing — it just won't be a real analysis.
 
 ### 5. Verify the setup
 
@@ -140,15 +116,11 @@ sudo mn --test pingall
 
 # Confirm Groq is reachable with your key
 python3 -c "from agents.llm_client import call_llm; print(call_llm('Reply with exactly: OK'))"
-
-# Confirm Ollama is running and the exact model is pulled
-curl -s http://localhost:11434/api/tags | grep qwen2.5:7b
 ```
 
-> **If that last command prints nothing:** either `ollama serve` isn't
-> running (start it in its own terminal — see Prerequisites), or the model
-> was pulled under a different name/tag than `qwen2.5:7b`. Run
-> `ollama list` to see what's actually there.
+> **If that last command errors:** a `401` means `GROQ_API_KEY` in `.env` is
+> missing or wrong, and a `404 model_not_found` means a model name in `.env`
+> is no longer on Groq's catalog — see the note under step 4.
 
 ---
 

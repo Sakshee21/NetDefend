@@ -55,10 +55,10 @@
 #     }
 
 import json
+import os
 from pathlib import Path
 
-import requests
-
+from agents.llm_client import call_llm, parse_json_response
 from agents.state_schema import NetDefendState
 
 
@@ -66,9 +66,19 @@ from agents.state_schema import NetDefendState
 # LLM CONFIGURATION
 # ======================================================
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-
-MODEL = "qwen2.5:7b"
+# Groq via the shared agents/llm_client.py -- the same client the Threat
+# Hunting Agent uses. Cloud inference answers in seconds, so a short
+# timeout is plenty.
+#
+# Model: MODEL_NAME_LIGHT (openai/gpt-oss-20b), not the MODEL_NAME_HEAVY
+# the Threat Hunting Agent uses. On this prompt, gpt-oss-120b in JSON mode
+# intermittently emitted an invalid number token ("confidence": 0. nine)
+# and failed Groq's JSON validation on roughly a third of attempts, while
+# gpt-oss-20b and qwen3.8-27b each returned valid JSON on 6/6 calls.
+# llm_client is imported above, which has already loaded .env.
+GROQ_MODEL = os.environ.get("MODEL_NAME_LIGHT", "openai/gpt-oss-20b")
+GROQ_TIMEOUT_S = 30
+LLM_MAX_ATTEMPTS = 2
 
 
 # ======================================================
@@ -294,33 +304,36 @@ INCIDENT EVIDENCE:
         indent=4
     )
 
-    payload = {
-
-        "model": MODEL,
-
-        "prompt":
-            SYSTEM_PROMPT +
-            "\n\n" +
-            user_prompt,
-
-        "stream": False,
-
-        "format": "json"
-    }
-
-    response = requests.post(
-        OLLAMA_URL,
-        json=payload,
-        timeout=600
-    )
-
-    response.raise_for_status()
-
-    result = response.json()
-
-    return json.loads(
-        result["response"]
-    )
+    # Two failure modes are retried: the model occasionally emits an invalid
+    # number token (observed: "confidence": 0. nine) which Groq's JSON mode
+    # rejects with a 400, and about 1 call in 6 returns valid JSON with a
+    # blank "reasoning" field. A call takes ~3s, so one retry is cheap; if
+    # every attempt fails the last error is re-raised and
+    # run_troubleshooting_agent()'s existing except-branch reports the
+    # honest "unavailable" fallback rather than a result with no reasoning.
+    last_exc = None
+    for attempt in range(1, LLM_MAX_ATTEMPTS + 1):
+        try:
+            raw = call_llm(
+                user_prompt,
+                system=SYSTEM_PROMPT,
+                timeout=GROQ_TIMEOUT_S,
+                model=GROQ_MODEL,
+                json_mode=True,  # replaces Ollama's "format": "json"
+            )
+            # parse_json_response() returns {} on unparseable output;
+            # raise instead so it counts as a failed attempt.
+            parsed = parse_json_response(raw)
+            if not parsed:
+                raise ValueError(f"LLM returned malformed or non-JSON output: {raw[:200]!r}")
+            if not str(parsed.get("reasoning") or "").strip():
+                raise ValueError("LLM returned valid JSON but an empty reasoning field")
+            return parsed
+        except Exception as exc:  # noqa: BLE001 -- retried, then re-raised below
+            last_exc = exc
+            print(f"[Network Troubleshooting Agent] LLM attempt "
+                  f"{attempt}/{LLM_MAX_ATTEMPTS} failed: {str(exc)[:160]}")
+    raise last_exc
 
 
 # ======================================================
@@ -337,8 +350,8 @@ _KNOWN_HYPOTHESES = {"MISCONFIGURATION", "NO_CLEAR_MISCONFIGURATION", "UNCERTAIN
 
 _PROTOCOL_NAMES = {1: "ICMP", 6: "TCP", 17: "UDP", 58: "ICMPv6"}
 
-# Returned when the Ollama call itself never produced a usable answer
-# (connection refused, model not pulled, malformed/non-JSON response,
+# Returned when the Groq call itself never produced a usable answer
+# (bad key, network error, malformed/non-JSON response, empty reasoning,
 # unrecognized hypothesis value, etc.) -- NOT a genuine "probably not a
 # misconfiguration" reading. is_misconfiguration=0.0 here means "the
 # agent has no opinion", not "confidently ruled out", so this should be
@@ -348,14 +361,16 @@ _FALLBACK_RESULT = {
     "is_misconfiguration": 0.0,
     "misconfig_reasoning": (
         "Network Troubleshooting Agent could not complete its analysis -- "
-        "the Ollama call failed or returned an unusable response. This is "
+        "the Groq call failed or returned an unusable response. This is "
         "NOT evidence against a misconfiguration; the agent simply never "
         "produced a real answer. See logs for the underlying error."
     ),
     "misconfig_hypothesis": {
-        "summary": "Troubleshooting analysis unavailable (Ollama call failed).",
-        "taxonomy_category": "OLLAMA_UNAVAILABLE",
-        "evidence": ["Ollama call failed or returned malformed JSON -- see logs."],
+        "summary": "Troubleshooting analysis unavailable (Groq call failed).",
+        # Matched exactly by frontend/src/components/HypothesesView.jsx --
+        # change both together.
+        "taxonomy_category": "LLM_UNAVAILABLE",
+        "evidence": ["Groq call failed or returned an unusable response -- see logs."],
     },
 }
 
@@ -521,7 +536,7 @@ def run_troubleshooting_agent(state: NetDefendState) -> dict:
         }
 
     except Exception as exc:  # noqa: BLE001 -- degrade gracefully, don't crash the pipeline
-        print(f"[Network Troubleshooting Agent] Ollama call failed: {exc}")
+        print(f"[Network Troubleshooting Agent] Groq call failed: {exc}")
         return dict(_FALLBACK_RESULT)
 
 

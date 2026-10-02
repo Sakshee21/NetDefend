@@ -62,7 +62,7 @@ export default function HypothesesView({ report }) {
           tagValue={misconfig?.taxonomy_category ?? 'Uncategorised'}
           evidence={misconfig?.evidence ?? []}
           confidence={misconfig?.is_misconfiguration}
-          llmCallFailed={misconfig?.taxonomy_category === 'OLLAMA_UNAVAILABLE'}
+          llmCallFailed={misconfig?.taxonomy_category === 'LLM_UNAVAILABLE'}
         />
       </section>
     </div>

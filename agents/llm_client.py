@@ -43,21 +43,36 @@ load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
 DEFAULT_MODEL = os.environ.get("MODEL_NAME_HEAVY", "openai/gpt-oss-120b")
 
 
-def call_llm(prompt: str, system: Optional[str] = None, model: str = DEFAULT_MODEL) -> str:
+def call_llm(
+    prompt: str,
+    system: Optional[str] = None,
+    model: str = DEFAULT_MODEL,
+    timeout: Optional[float] = None,
+    json_mode: bool = False,
+) -> str:
     """Send a single-turn prompt to Groq and return the raw text response.
 
-    Requires GROQ_API_KEY in the environment.
+    Requires GROQ_API_KEY in the environment. ``timeout`` (seconds) is
+    optional; when omitted the Groq SDK's own default applies, so existing
+    callers behave exactly as before. ``json_mode=True`` asks Groq to
+    constrain the output to valid JSON (the equivalent of Ollama's
+    ``"format": "json"``); the prompt itself must still mention JSON.
     """
     from groq import Groq
 
-    client = Groq()  # reads GROQ_API_KEY from the environment
+    # reads GROQ_API_KEY from the environment
+    client = Groq(timeout=timeout) if timeout is not None else Groq()
 
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
 
-    completion = client.chat.completions.create(model=model, messages=messages)
+    kwargs = {"model": model, "messages": messages}
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
+
+    completion = client.chat.completions.create(**kwargs)
     return completion.choices[0].message.content or ""
 
 
