@@ -320,3 +320,18 @@
     margin-left: auto;
   }
 }
+
+/* "Still working" hint after ~30s of a running pipeline. */
+.pipeline-slow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 20px 14px;
+  padding: 9px 13px;
+  border: 1px solid var(--uncertain-line);
+  border-radius: var(--radius);
+  background: var(--uncertain-soft);
+  color: var(--uncertain);
+  font-size: 12.5px;
+  animation: nd-rise 0.3s ease both;
+}

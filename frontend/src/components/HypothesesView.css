@@ -90,6 +90,16 @@
   line-height: 1.5;
 }
 
+.final-report-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.final-report-stage .stage-label {
+  padding-top: 4px;
+}
+
 @media (max-width: 900px) {
   .argument-tag-row {
     grid-template-columns: 1fr;

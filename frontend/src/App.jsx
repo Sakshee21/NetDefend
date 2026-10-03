@@ -98,15 +98,16 @@ export default function App() {
     setRunning(true)
     setView('pipeline')
 
-    // The request and the pipeline animation run concurrently: the animation is
-    // pure presentation, so pointing api.js at the real FastAPI service does not
-    // change anything here.
+    // The request and the pipeline animation run together, but the last two
+    // stages (arbiter, response) are gated on the real request: the timeline
+    // holds them "running" until the backend returns, so a 15-85s live run
+    // never shows the pipeline finished before the report actually arrives.
     const request = analyzeIncident(files).then(
       (value) => ({ ok: true, value }),
       (reason) => ({ ok: false, reason }),
     )
 
-    await runPipelineTimeline(setStages, () => runRef.current === runId)
+    await runPipelineTimeline(setStages, () => runRef.current === runId, request)
     const result = await request
     if (runRef.current !== runId) return
 
@@ -162,11 +163,10 @@ export default function App() {
             const disabled =
               (id === 'pipeline' && !pipelineStarted) ||
               ((id === 'debate' || id === 'report') && !report) ||
-              // IncidentReport assumes the full MOCK_REPORT shape
-              // (classification, risk_level, mitre_ttp, ...), which the
-              // real backend does not return yet -- see
-              // backend/api/analyze.py's "note" field.
-              (id === 'report' && report && !report.classification)
+              // The report view needs a report-shaped object: the mock's
+              // top-level classification, or the live response's
+              // final_report (see backend/api/analyze.py).
+              (id === 'report' && report && !report.classification && !report.final_report)
             return (
               <button
                 key={id}
@@ -282,7 +282,7 @@ export default function App() {
 
             {view === 'report' &&
               (report ? (
-                <IncidentReport report={report} />
+                <IncidentReport report={report.final_report ?? report} />
               ) : (
                 <EmptyState label="Run an analysis or pick an incident from the history." />
               ))}

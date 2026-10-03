@@ -76,18 +76,42 @@ export function initialStageState() {
 }
 
 /**
- * Drives the visual pipeline: marks each group running, waits, marks it complete.
- * Runs alongside the real analyzeIncident() request rather than gating it, so
- * swapping the mock API for FastAPI does not change this animation.
+ * Drives the visual pipeline. The first three groups (packet, intrusion,
+ * the parallel hypothesis branch) animate on their own timers. The last two
+ * stages (arbiter, response) are GATED on the real request: the arbiter is
+ * held "running" until requestPromise settles, so a 15-85s live run never
+ * shows the pipeline finished before the report actually arrives. With the
+ * mock API, requestPromise resolves on the mock's own latency, so the
+ * animation still reads sensibly.
  */
-export async function runPipelineTimeline(setStages, shouldContinue = () => true) {
-  for (const group of TIMELINE) {
+export async function runPipelineTimeline(
+  setStages,
+  shouldContinue = () => true,
+  requestPromise = null,
+) {
+  // packet -> intrusion -> [threat, troubleshoot], on timers.
+  for (const group of TIMELINE.slice(0, 3)) {
     if (!shouldContinue()) return
     setStages((current) => withStatus(current, group.ids, 'running'))
     await new Promise((resolve) => setTimeout(resolve, group.duration))
     if (!shouldContinue()) return
     setStages((current) => withStatus(current, group.ids, 'complete'))
   }
+
+  // Arbiter: hold running until the backend actually returns.
+  if (!shouldContinue()) return
+  setStages((current) => withStatus(current, ['arbiter'], 'running'))
+  if (requestPromise) {
+    await requestPromise.catch(() => {})
+  }
+  if (!shouldContinue()) return
+  setStages((current) => withStatus(current, ['arbiter'], 'complete'))
+
+  // Response: brief visual once the result is in hand.
+  setStages((current) => withStatus(current, ['response'], 'running'))
+  await new Promise((resolve) => setTimeout(resolve, 700))
+  if (!shouldContinue()) return
+  setStages((current) => withStatus(current, ['response'], 'complete'))
 }
 
 function withStatus(current, ids, status) {
@@ -127,6 +151,8 @@ export default function AgentPipeline({ stages, error = null }) {
             </span>
           </div>
         </header>
+
+        <SlowHint running={active} reset={completed === 0} />
 
         <div className="flow">
           <StageCard stage={byId.packet} status={stages.packet} />
@@ -229,6 +255,40 @@ function lineState(status) {
   if (status === 'complete') return 'is-complete'
   if (status === 'running') return 'is-running'
   return ''
+}
+
+/** After ~30s of a still-running pipeline, reassure the viewer the long
+ *  wait is expected (live LLM calls, especially the arbiter's four). */
+function SlowHint({ running, reset, thresholdMs = 30000 }) {
+  const [slow, setSlow] = useState(false)
+  const startRef = useRef(null)
+
+  useEffect(() => {
+    if (reset) {
+      startRef.current = null
+      setSlow(false)
+    }
+  }, [reset])
+
+  useEffect(() => {
+    if (!running) return undefined
+    if (startRef.current === null) startRef.current = Date.now()
+    const remaining = Math.max(0, thresholdMs - (Date.now() - startRef.current))
+    if (remaining === 0) {
+      setSlow(true)
+      return undefined
+    }
+    const id = setTimeout(() => setSlow(true), remaining)
+    return () => clearTimeout(id)
+  }, [running, thresholdMs])
+
+  if (!running || !slow) return null
+  return (
+    <p className="pipeline-slow">
+      <span className="spinner" aria-hidden="true" />
+      Still working… live LLM calls (including the arbiter’s four) can take up to ~90s.
+    </p>
+  )
 }
 
 /** Wall-clock timer for the current run. */

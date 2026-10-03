@@ -1,9 +1,16 @@
 import { useState } from 'react'
 import { formatTimestamp, percent, titleCase, tone } from '../lib/format'
-import { IconCopy, IconDownload, IconGavel, IconSiren } from '../lib/icons'
+import { IconAlert, IconCopy, IconDownload, IconGavel, IconPrinter, IconSiren } from '../lib/icons'
 import './IncidentReport.css'
 
-/** The signed-off summary an analyst reads first. */
+/**
+ * The signed-off summary an analyst reads first. Handles two shapes:
+ * the full mock report (with threat/misconfig hypotheses and source
+ * files) and the lean live final_report from the Incident Response Agent
+ * (classification, risk, confidence, mitre, recommended_action,
+ * affected_host, escalation_note). Hypothesis/evidence sections render
+ * only when that data is present, so the live report degrades cleanly.
+ */
 export default function IncidentReport({ report }) {
   const [copied, setCopied] = useState(false)
   if (!report) return null
@@ -18,6 +25,7 @@ export default function IncidentReport({ report }) {
     misconfig_hypothesis: antithesis,
     recommended_action: action,
     affected_host: host,
+    escalation_note: escalation,
     timestamp,
     source_files: sources,
   } = report
@@ -28,6 +36,8 @@ export default function IncidentReport({ report }) {
   const secondary = uncertain || attackLed ? antithesis : thesis
   const primaryLabel = uncertain || attackLed ? 'Attack evidence' : 'Misconfiguration evidence'
   const secondaryLabel = uncertain || attackLed ? 'Misconfiguration evidence' : 'Attack evidence'
+
+  const hostKnown = host && String(host).toLowerCase() !== 'unknown'
 
   const copyJson = async () => {
     try {
@@ -48,6 +58,8 @@ export default function IncidentReport({ report }) {
     link.click()
     URL.revokeObjectURL(url)
   }
+
+  const printReport = () => window.print()
 
   return (
     <article className={`report panel ${tone(classification)}`}>
@@ -79,13 +91,15 @@ export default function IncidentReport({ report }) {
 
       <section className="facts">
         <Fact label="Classification" value={titleCase(classification)} tone={tone(classification)} />
-        <Fact label="Affected host" value={host ?? '—'} mono />
-        <Fact
-          label="MITRE ATT&CK"
-          value={mitre ? mitre.id : 'Not applicable'}
-          sub={mitre ? mitre.name : 'No adversary technique mapped'}
-          mono
-        />
+        <div className="fact">
+          <span className="eyebrow">Affected host</span>
+          <span className={hostKnown ? 'fact-value mono' : 'fact-value is-muted'}>
+            {hostKnown ? host : 'unknown'}
+          </span>
+        </div>
+        {mitre && (
+          <Fact label="MITRE ATT&CK" value={mitre.id} sub={mitre.name} mono />
+        )}
         <div className="fact fact-confidence">
           <span className="eyebrow">Confidence</span>
           <div className="confidence-row">
@@ -107,39 +121,53 @@ export default function IncidentReport({ report }) {
         </div>
       </section>
 
-      <section className="report-section">
-        <span className="eyebrow">Assessment</span>
-        <p className="assessment">{primary?.summary}</p>
-      </section>
+      {primary?.summary && (
+        <section className="report-section">
+          <span className="eyebrow">Assessment</span>
+          <p className="assessment">{primary.summary}</p>
+        </section>
+      )}
 
-      <section className="report-section">
-        <span className="eyebrow">{primaryLabel}</span>
-        <ul className="evidence">
-          {(primary?.evidence ?? []).map((item) => (
-            <li key={item}>
-              <span className="evidence-bullet" aria-hidden="true" />
-              {item}
-            </li>
-          ))}
-        </ul>
+      {(primary?.evidence ?? []).length > 0 && (
+        <section className="report-section">
+          <span className="eyebrow">{primaryLabel}</span>
+          <ul className="evidence">
+            {primary.evidence.map((item) => (
+              <li key={item}>
+                <span className="evidence-bullet" aria-hidden="true" />
+                {item}
+              </li>
+            ))}
+          </ul>
 
-        {(secondary?.evidence ?? []).length > 0 && (
-          <details className="counter">
-            <summary>
-              {secondaryLabel} · {secondary.evidence.length} items considered and{' '}
-              {uncertain ? 'unresolved' : 'discounted'}
-            </summary>
-            <ul className="evidence is-muted">
-              {secondary.evidence.map((item) => (
-                <li key={item}>
-                  <span className="evidence-bullet" aria-hidden="true" />
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
-      </section>
+          {(secondary?.evidence ?? []).length > 0 && (
+            <details className="counter">
+              <summary>
+                {secondaryLabel} · {secondary.evidence.length} items considered and{' '}
+                {uncertain ? 'unresolved' : 'discounted'}
+              </summary>
+              <ul className="evidence is-muted">
+                {secondary.evidence.map((item) => (
+                  <li key={item}>
+                    <span className="evidence-bullet" aria-hidden="true" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </section>
+      )}
+
+      {escalation && (
+        <section className="escalation-panel">
+          <span className="escalation-head">
+            <IconAlert width={15} height={15} />
+            Escalated for human review
+          </span>
+          <p className="escalation-text">{escalation}</p>
+        </section>
+      )}
 
       <section className={`callout ${tone(classification)}`}>
         <span className="callout-icon">
@@ -160,13 +188,17 @@ export default function IncidentReport({ report }) {
               {sources.firewall_log && <span>{sources.firewall_log}</span>}
             </>
           ) : (
-            <span>Archived analysis</span>
+            <span>Live analysis</span>
           )}
         </div>
         <div className="report-actions">
           <button type="button" className="btn btn-ghost btn-sm" onClick={copyJson}>
             <IconCopy width={14} height={14} />
             {copied ? 'Copied' : 'Copy JSON'}
+          </button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={printReport}>
+            <IconPrinter width={14} height={14} />
+            Print
           </button>
           <button type="button" className="btn btn-sm" onClick={downloadJson}>
             <IconDownload width={14} height={14} />

@@ -1,13 +1,10 @@
 """POST /analyze -- runs the real NetDefend pipeline on an uploaded
 PCAP + log file and returns its output.
 
-Runs the full agents.graph.app now that the Dialectical Arbiter is real
-(see agents/arbiter.py): the response surfaces the two competing
-hypotheses, the real refutation exchange between them, and the arbiter's
-adjudicated verdict. The only remaining stub is the Incident Response
-Agent (agents/response_agent.py), whose risk_level / recommended_action
-are still placeholder, so this endpoint deliberately does NOT surface
-final_report -- see the ``note`` field in the response.
+Runs the full agents.graph.app: the response surfaces the two competing
+hypotheses, the real refutation exchange between them, the arbiter's
+adjudicated verdict, and the Incident Response Agent's final_report. Every
+agent in the pipeline is real now; nothing here is stubbed.
 """
 import tempfile
 from pathlib import Path
@@ -128,9 +125,9 @@ def analyze(
         #   escalation? (only when UNCERTAIN)}.
         "refutation_exchange": result.get("refutation_exchange", []),
         "arbiter_verdict": result.get("arbiter_verdict"),
-        "note": (
-            "Verdict and refutation are the real Dialectical Arbiter output. "
-            "The Incident Response Agent is still a stub, so risk level and "
-            "recommended action are not shown yet."
-        ),
+        # The Incident Response Agent's final report, passed through as-is
+        # (see agents/response_agent.py): incident_id, classification,
+        # risk_level, confidence, mitre_ttp, recommended_action,
+        # affected_host, escalation_note (only when UNCERTAIN), timestamp.
+        "final_report": result.get("final_report"),
     }

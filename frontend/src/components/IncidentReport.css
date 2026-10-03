@@ -283,6 +283,41 @@
   gap: 8px;
 }
 
+/* Affected host shown as "unknown" -- muted, not an error state. */
+.fact-value.is-muted {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+/* Amber escalation panel, shown above the recommended action when the
+   verdict is UNCERTAIN. */
+.escalation-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 13px 15px;
+  border: 1px solid var(--uncertain-line);
+  border-radius: var(--radius);
+  background: var(--uncertain-soft);
+}
+
+.escalation-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--uncertain);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.escalation-text {
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 @media (max-width: 640px) {
   .report {
     padding: 18px 16px 14px;
@@ -290,5 +325,22 @@
 
   .report-number {
     font-size: 18px;
+  }
+}
+
+/* Print: drop the app chrome and print just the report card. App.jsx tags
+   the report container so print rules can target it. */
+@media print {
+  .sidebar,
+  .topbar,
+  .view-head,
+  .report-actions,
+  .nav {
+    display: none !important;
+  }
+
+  .report {
+    border: 1px solid #999;
+    box-shadow: none;
   }
 }

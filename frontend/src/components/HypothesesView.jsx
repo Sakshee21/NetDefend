@@ -1,5 +1,6 @@
 import { agentInfo, challengerOf, percent, titleCase, tone } from '../lib/format'
 import { IconAlert, IconGavel, IconTarget, IconWrench } from '../lib/icons'
+import IncidentReport from './IncidentReport'
 import './DialecticalDebate.css'
 import './HypothesesView.css'
 
@@ -19,6 +20,7 @@ export default function HypothesesView({ report }) {
     misconfig_hypothesis: misconfig,
     refutation_exchange: exchange = [],
     arbiter_verdict: verdict,
+    final_report: finalReport,
     note,
   } = report
 
@@ -74,6 +76,13 @@ export default function HypothesesView({ report }) {
       {exchange.length > 0 && <RefutationExchange exchange={exchange} />}
 
       {verdict && <ArbiterVerdict verdict={verdict} />}
+
+      {finalReport && (
+        <div className="final-report-stage">
+          <p className="eyebrow stage-label">Incident response</p>
+          <IncidentReport report={finalReport} />
+        </div>
+      )}
     </div>
   )
 }

@@ -77,8 +77,19 @@ export async function fetchIncident(incidentId) {
 async function mockAnalyzeIncident(files) {
   if (!files?.pcap) throw new Error('A PCAP file is required to run the pipeline.')
   await sleep(MOCK_LATENCY_MS)
+  // Demo toggle: ?mock=uncertain returns the UNCERTAIN/escalation scenario,
+  // anything else returns the ACL MISCONFIGURATION scenario.
+  let variant = 'misconfig'
+  try {
+    if (new URLSearchParams(window.location.search).get('mock') === 'uncertain') {
+      variant = 'uncertain'
+    }
+  } catch {
+    /* no window (SSR/tests) — fall back to the default variant */
+  }
+  const base = variant === 'uncertain' ? MOCK_REPORT_UNCERTAIN : MOCK_REPORT
   return {
-    ...MOCK_REPORT,
+    ...base,
     // Freshen the ID and timestamp so repeat runs read as distinct incidents.
     incident_id: `INC-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`,
     timestamp: new Date().toISOString(),
@@ -90,53 +101,99 @@ async function mockAnalyzeIncident(files) {
   }
 }
 
-/** The canonical backend response shape. */
+/** The canonical backend response shape. Default demo scenario: the ACL
+ *  misconfiguration that the real pipeline is built around. */
 export const MOCK_REPORT = {
   incident_id: 'INC-2026-0847',
-  classification: 'ATTACK',
-  risk_level: 'HIGH',
-  confidence: 0.89,
-  mitre_ttp: {
-    id: 'T1021.002',
-    name: 'SMB/Windows Admin Shares',
-  },
+  classification: 'MISCONFIGURATION',
+  risk_level: 'MEDIUM',
+  confidence: 0.85,
+  mitre_ttp: null,
   threat_hypothesis: {
-    summary: 'Port 445 traffic indicates SMB lateral movement',
+    summary:
+      'Repeated SYN probes to 10.0.0.2:8000 with no replies could be a low-rate service scan.',
     evidence: [
-      'Unusual internal SMB session volume',
-      'Sequential host access pattern across 5 hosts in 40 seconds',
+      '20 SYN packets across 10 flows to 10.0.0.2:8000, 0 SYN-ACKs',
+      'Pattern labelled repeated_blocked_attempts over a 28s window',
     ],
   },
   misconfig_hypothesis: {
-    summary: 'ACL rule change may have misrouted backup traffic',
-    taxonomy_category: 'ACL Misconfiguration',
-    evidence: ['ACL rule pushed at 14:02 IST', 'Timestamp correlates with anomaly onset'],
+    summary:
+      'An iptables DROP rule is blocking legitimate TCP traffic to 10.0.0.2:8000.',
+    taxonomy_category: 'ACL_FIREWALL',
+    evidence: [
+      'Firewall log: DROP rule pkts rose from 0 to 20 after traffic was generated',
+      'Absence of SYN-ACKs is the signature of a silent drop, not a refusal',
+      'Random Forest labels the flow Benign (attack probability 0.11)',
+    ],
   },
   refutation_exchange: [
     {
       challenged_agent: 'threat_hunting',
-      challenge: 'If this is an attack, where is the outbound C2 beacon in the PCAP?',
+      challenge:
+        'The firewall log shows a DROP rule matched exactly 20 packets to 10.0.0.2:8000. How is that a scan rather than blocked legitimate traffic?',
       response:
-        'No outbound C2 beacon found, but sequential access pattern across 5 hosts is inconsistent with normal backup behavior.',
+        'A dropped SYN is still a SYN an attacker chose to send; the 20-packet budget fits a deliberate low-rate probe. But no follow-on activity is present.',
     },
     {
       challenged_agent: 'troubleshooting',
       challenge:
-        'If this is a misconfiguration, why do TCP flags show non-standard SYN scan behavior?',
+        'If this is just a misconfiguration, why does the ML model see a repeated_blocked_attempts pattern at all?',
       response:
-        'SYN pattern is consistent with backup software reconnection attempts due to misrouted subnet.',
+        'That pattern is exactly what a DROP rule produces: repeated unanswered SYNs from a legitimate client whose traffic the firewall silently discards.',
     },
   ],
-  // TODO(backend): once the Incident Response Agent produces this field for real,
-  // add a validation step that checks recommended_action is topically consistent
-  // with the classified mitre_ttp before the report is returned. This mock
-  // previously paired a T1021.002 (SMB, port 445) classification with a DNS
-  // port 53 remediation, and the mismatch was only caught by reading it. A
-  // check on the agent output would catch that class of error automatically.
   recommended_action:
-    'Isolate affected hosts on the SMB traffic subnet; disable SMB (port 445) access on non-administrative endpoints; audit lateral authentication attempts across the affected hosts over the past 24 hours.',
-  affected_host: '192.168.10.45',
+    'Review and correct the iptables DROP rule blocking TCP traffic to 10.0.0.2 on port 8000. Confirm whether the block is intentional; if not, reposition or remove it so the legitimate service path is restored, then retest connectivity.',
+  affected_host: '10.0.0.2',
   timestamp: '2026-09-05T14:23:41Z',
+}
+
+/** Second demo scenario (?mock=uncertain): the arbiter could not separate
+ *  the two hypotheses, so the incident is escalated for human review. */
+export const MOCK_REPORT_UNCERTAIN = {
+  incident_id: 'INC-2026-0851',
+  classification: 'UNCERTAIN',
+  risk_level: 'MEDIUM',
+  confidence: 0.54,
+  mitre_ttp: null,
+  threat_hypothesis: {
+    summary: 'Repeated SYN-only attempts to 10.0.0.2:8000 could be reconnaissance.',
+    evidence: [
+      '20 SYN packets, 0 SYN-ACKs, across 10 flows to 10.0.0.2:8000',
+      'No LOG entries despite the DROP counter advancing',
+    ],
+  },
+  misconfig_hypothesis: {
+    summary: 'A DROP rule with no LOG target is silently blocking the traffic.',
+    taxonomy_category: 'ACL_FIREWALL',
+    evidence: [
+      'DROP counter rose 0 -> 20; no matching LOG line exists',
+      'Benign ML scores are consistent with a blocked legitimate client',
+    ],
+  },
+  refutation_exchange: [
+    {
+      challenged_agent: 'threat_hunting',
+      challenge:
+        'With no LOG entries and only 20 SYNs, what distinguishes this from a benign client hitting a drop rule?',
+      response:
+        'Nothing conclusive — the volume is too low to separate a cautious probe from a blocked legitimate client on this evidence alone.',
+    },
+    {
+      challenged_agent: 'troubleshooting',
+      challenge:
+        'Can you prove the DROP is misconfigured rather than an intended block of hostile traffic?',
+      response:
+        'Not from this capture — the rule could be deliberate. The log lacks the LOG target that would confirm intent.',
+    },
+  ],
+  recommended_action:
+    'Route this incident to a human analyst. Obtain the full iptables ruleset for 10.0.0.2:8000 (including whether the DROP is intentional) and a longer capture to confirm whether the SYN source is a legitimate client before classifying.',
+  escalation_note:
+    'Verdict is UNCERTAIN — neither hypothesis clearly survived cross-examination on the available evidence. Recommend human analyst review; risk cannot be firmly assessed until the block’s intent is confirmed.',
+  affected_host: '10.0.0.2',
+  timestamp: '2026-09-05T15:10:22Z',
 }
 
 /** Past analyses backing the history sidebar. */

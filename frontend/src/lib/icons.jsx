@@ -142,6 +142,14 @@ export const IconBrain = (props) => (
   </svg>
 )
 
+export const IconPrinter = (props) => (
+  <svg {...base} {...props}>
+    <path d="M7 9V4h10v5" />
+    <path d="M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" />
+    <rect x="7" y="15" width="10" height="6" rx="1" />
+  </svg>
+)
+
 export const IconSiren = (props) => (
   <svg {...base} {...props}>
     <path d="M6.5 15a5.5 5.5 0 0 1 11 0v2h-11v-2Z" />
