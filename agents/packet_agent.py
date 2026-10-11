@@ -11,8 +11,9 @@ each row is exactly one 5-tuple flow -- not a summary across many flows.
 Feeding capture-wide totals produces statistically meaningless predictions.
 This agent picks the single most notable flow instead of averaging/summing.
 """
+import statistics
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 import pandas as pd
@@ -87,6 +88,81 @@ def _select_representative_flow(flows_df: pd.DataFrame) -> tuple:
     )
 
 
+# IPv6 Hop-by-Hop (0) and ICMPv6 (58) are the multicast-listener /
+# router-solicitation chatter that pollutes every Mininet capture. They are
+# excluded when choosing the "subject" source and computing its fan-out, so a
+# link-local noise source never masquerades as the scanner/client. ICMP (1) is
+# kept, so host sweeps are still characterized.
+_NOISE_PROTOS = (0, 58)
+
+
+def _discriminating_features(real_flows: list, subject_src, target_ip, target_port) -> dict:
+    """Scan-vs-legitimate-client signals for one source IP, computed over the
+    non-noise flows. All four are evidence for the reasoning agents only --
+    none of this reaches the per-flow ML models.
+
+    - distinct_dst_ports / distinct_dst_hosts: how far the source fans out. A
+      port scan hits many ports on one host; a host sweep hits many hosts; a
+      blocked legitimate client hammers one port on one host.
+    - prior_successful_flows: flows from the source to the same target
+      (dst_ip:dst_port) that completed a handshake (synack_count > 0). A real
+      client usually has prior successes; a scanner typically has none.
+    - retry_interval_cv: coefficient of variation of the gaps between attempts
+      to the target. Low = regular, automated retries (client behind a new
+      block); high = bursty (scan). None when there are fewer than two attempts.
+    """
+    if not subject_src:
+        return {
+            "subject_source": None,
+            "distinct_dst_ports": 0,
+            "distinct_dst_hosts": 0,
+            "prior_successful_flows": 0,
+            "retry_interval_cv": None,
+        }
+
+    src_flows = [f for f in real_flows if f["src_ip"] == subject_src]
+    distinct_dst_ports = len({f["dst_port"] for f in src_flows})
+    distinct_dst_hosts = len({f["dst_ip"] for f in src_flows})
+
+    if target_ip is not None:
+        target_flows = [
+            f for f in src_flows
+            if f["dst_ip"] == target_ip and f["dst_port"] == target_port
+        ]
+    else:
+        target_flows = []
+
+    # A completed handshake is a SYN-ACK from the target back to the source.
+    # Flows are keyed per-direction, so that SYN-ACK lives in the REVERSE flow
+    # (src = target, dst = subject), not in the subject -> target flow. Count
+    # reverse flows carrying a SYN-ACK = successful handshakes from the target.
+    if target_ip is not None:
+        prior_successful_flows = sum(
+            1 for f in real_flows
+            if f["src_ip"] == target_ip and f["src_port"] == target_port
+            and f["dst_ip"] == subject_src and f["synack_count"] > 0
+        )
+    else:
+        prior_successful_flows = 0
+
+    starts = sorted(f["first_timestamp"] for f in target_flows)
+    gaps = [b - a for a, b in zip(starts, starts[1:])]
+    if gaps:
+        mean_gap = statistics.mean(gaps)
+        cv = (statistics.pstdev(gaps) / mean_gap) if mean_gap > 0 else 0.0
+        retry_interval_cv = round(cv, 4)
+    else:
+        retry_interval_cv = None
+
+    return {
+        "subject_source": subject_src,
+        "distinct_dst_ports": distinct_dst_ports,
+        "distinct_dst_hosts": distinct_dst_hosts,
+        "prior_successful_flows": prior_successful_flows,
+        "retry_interval_cv": retry_interval_cv,
+    }
+
+
 def _compute_cross_flow_pattern(flows: dict) -> dict:
     """Cross-flow aggregate evidence: groups flows by (dst_ip, dst_port,
     protocol) -- ignoring source port -- to surface repeated connection
@@ -130,8 +206,42 @@ def _compute_cross_flow_pattern(flows: dict) -> dict:
         if total_syn > 0 and total_synack == 0:
             candidates.append((total_syn, dst_ip, dst_port, total_synack, group))
 
-    if not candidates:
-        return {
+    # Real traffic only, for subject selection + fan-out (excludes IPv6 noise).
+    real_flows = [f for f in flows.values() if f["protocol"] not in _NOISE_PROTOS]
+
+    if candidates:
+        total_syn, dst_ip, dst_port, total_synack, group = max(candidates, key=lambda c: c[0])
+        earliest = min(f["first_timestamp"] for f in group)
+        latest = max(f["last_timestamp"] for f in group)
+        # Subject = the source sending the most SYNs to this blocked target.
+        src_syn = defaultdict(int)
+        for f in group:
+            src_syn[f["src_ip"]] += f["syn_count"]
+        subject_src = max(src_syn, key=src_syn.get) if src_syn else None
+        target_ip, target_port = dst_ip, dst_port
+        result = {
+            "destination": {"ip": dst_ip, "port": int(dst_port)},
+            "flow_count": len(group),
+            "total_syn_count": int(total_syn),
+            "total_synack_count": int(total_synack),
+            "time_span_s": max(latest - earliest, 0.0),
+            "pattern": "repeated_blocked_attempts",
+        }
+    else:
+        # No blocked-attempt group. The discriminating fields still matter: a
+        # port/host scan fans out without any single destination accumulating
+        # blocked SYNs, so characterize the busiest (non-noise) source.
+        src_counts = Counter(f["src_ip"] for f in real_flows)
+        subject_src = src_counts.most_common(1)[0][0] if src_counts else None
+        target_ip, target_port = None, None
+        if subject_src:
+            dst_counts = Counter(
+                (f["dst_ip"], f["dst_port"]) for f in real_flows
+                if f["src_ip"] == subject_src
+            )
+            if dst_counts:
+                target_ip, target_port = dst_counts.most_common(1)[0][0]
+        result = {
             "destination": {"ip": None, "port": None},
             "flow_count": 0,
             "total_syn_count": 0,
@@ -140,18 +250,8 @@ def _compute_cross_flow_pattern(flows: dict) -> dict:
             "pattern": "none_detected",
         }
 
-    total_syn, dst_ip, dst_port, total_synack, group = max(candidates, key=lambda c: c[0])
-    earliest = min(f["first_timestamp"] for f in group)
-    latest = max(f["last_timestamp"] for f in group)
-
-    return {
-        "destination": {"ip": dst_ip, "port": int(dst_port)},
-        "flow_count": len(group),
-        "total_syn_count": int(total_syn),
-        "total_synack_count": int(total_synack),
-        "time_span_s": max(latest - earliest, 0.0),
-        "pattern": "repeated_blocked_attempts",
-    }
+    result.update(_discriminating_features(real_flows, subject_src, target_ip, target_port))
+    return result
 
 
 def run_packet_agent(state: NetDefendState) -> dict:
@@ -190,6 +290,12 @@ def run_packet_agent(state: NetDefendState) -> dict:
           f"total_syn_count={cross_flow_pattern['total_syn_count']}, "
           f"total_synack_count={cross_flow_pattern['total_synack_count']}, "
           f"time_span_s={cross_flow_pattern['time_span_s']:.2f})")
+    print(f"[Packet Analysis Agent] discriminating: "
+          f"subject_source={cross_flow_pattern['subject_source']}, "
+          f"distinct_dst_ports={cross_flow_pattern['distinct_dst_ports']}, "
+          f"distinct_dst_hosts={cross_flow_pattern['distinct_dst_hosts']}, "
+          f"prior_successful_flows={cross_flow_pattern['prior_successful_flows']}, "
+          f"retry_interval_cv={cross_flow_pattern['retry_interval_cv']}")
 
     print("[Packet Analysis Agent] calculating features...")
     features = calculate_features(flows)

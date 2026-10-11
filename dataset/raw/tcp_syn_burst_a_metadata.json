@@ -1,0 +1,37 @@
+{
+  "scenario_id": "tcp_syn_burst_a",
+  "family": "tcp_syn_burst",
+  "ground_truth": "ATTACK",
+  "scenario_type": "CONTROLLED_LAB_TRAFFIC",
+  "source_ip": "10.0.0.1",
+  "destination_ip": "10.0.0.2",
+  "generator": "python3 + scapy 2.5.0 (this script); standalone Open vSwitch bridge",
+  "tool": "Python 3 with Scapy",
+  "attack_technique": null,
+  "label_basis": "simulated by script; intent-labelled",
+  "pcap_file": "tcp_syn_burst_a.pcap",
+  "evidence_file": "tcp_syn_burst_a_evidence.txt",
+  "notes": "Controlled-lab tcp_syn_burst (variant a), attacker h1 -> victim h2. Ground truth is recorded only in this *_metadata.json; no file an agent reads carries the label. No ATT&CK technique is claimed: a short burst/series of packets does not on its own prove a DoS, so this is labelled attack traffic by intent only.",
+  "destination_ips": null,
+  "parameters": {
+    "count": 40,
+    "dport": 8000,
+    "delay": 0.001
+  },
+  "listener_on_victim": null,
+  "expected_packets": {
+    "syn_packets": 40,
+    "dport": 8000
+  },
+  "verified_packets": {
+    "syn_packets": 40,
+    "dport": 8000,
+    "median_gap_s": 0.0359
+  },
+  "pcap_verified": true,
+  "verification_notes": [],
+  "rules_verified": true,
+  "restrictive_rules_found": false,
+  "duration_s": 3.33,
+  "generated_at": "2026-10-11T11:53:49"
+}

@@ -1,33 +1,36 @@
 #!/usr/bin/env python3
 """DNS resolver misconfiguration scenario — reproducible Mininet script.
 
-Builds the same h1/h2 topology as mininet/topologies/basic_topology.py,
-then automates a resolver misconfiguration: h2 runs a DNS responder that
-never caches anything and answers every query as if it were forwarding
-externally from scratch. h1 repeatedly queries the same domain, producing
-a sustained query-volume spike that superficially resembles DNS
-tunneling exfiltration, but is actually a benign caching bug.
+Builds a two-host topology (same OVS standalone switch as
+mininet/topologies/basic_topology.py) using a host pair drawn from the
+shared NetDefend-Bench pool (_benchlib.PAIR_POOL). The victim runs a
+stdlib UDP DNS responder that answers correctly but never caches; the
+source repeatedly queries the same domain, producing a sustained
+query-volume spike.
 
-dnsmasq is not installed in this environment, so h2's resolver is a
-small stdlib-only UDP DNS responder (no third-party DNS library, so it
-runs the same regardless of what's importable under `sudo`). It answers
-real dig queries correctly -- this isn't a stub that drops traffic, it's
-a resolver that works but never remembers what it already answered.
-h1 and h2 have no route to genuine external DNS infrastructure from this
-isolated topology, so "always forwards externally" is modeled as
-"always resolves fresh, never from a cache" -- the same observable
-behavior (no cache hits despite repeated identical queries) without
-requiring real internet egress from a Mininet host namespace.
+The evidence file is built from _benchlib's shared helpers, in the SAME
+format every NetDefend-Bench scenario uses (raw firewall rules + INPUT
+counters + a kernel log-trail check), plus one extra section carrying the
+resolver's own before/after state (query counters and cache settings) as
+raw tool output. It contains only operator-visible facts — never a verdict
+word, the scenario/family name, or a source-file reference. Ground truth
+lives only in the *_metadata.json, which no agent reads.
 
-Uses Mininet's Python API directly (Mininet, Node/Host, OVSSwitch) -- no
-interactive CLI(net) session, no scripted CLI commands. Per-host commands
-run through Host.cmd().
+dnsmasq is not installed here, so the resolver is a small stdlib-only UDP
+responder (no third-party DNS library, so it runs the same regardless of
+what's importable under `sudo`).
+
+Run on any pair (A, B, C). The output id includes the pair
+(dns_misconfig_A/_B/_C) so runs never overwrite.
 
 Must be run as root (Mininet requirement):
 
-    sudo python3 mininet/scenarios/dns_misconfig.py
+    sudo python3 mininet/scenarios/dns_misconfig.py --pair C
 """
+import argparse
 import json
+import signal
+import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
@@ -36,8 +39,12 @@ from mininet.net import Mininet
 from mininet.node import OVSSwitch
 from mininet.log import setLogLevel
 
-H1_IP = "10.0.0.1"
-H2_IP = "10.0.0.2"
+from _benchlib import (
+    PAIR_POOL, ip_of,
+    capture_rule_sections, capture_log_trail, build_evidence,
+)
+
+FAMILY = "dns_misconfig"
 DNS_PORT = 53
 QUERY_DOMAIN = "example.com"
 NUM_QUERIES = 18
@@ -45,43 +52,23 @@ QUERY_SLEEP_BETWEEN = 1
 DIG_TIMEOUT = 2
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-RAW_DIR = REPO_ROOT / "dataset" / "raw"
 
-PCAP_PATH = RAW_DIR / "dns_misconfig.pcap"
-CONFIG_PATH = RAW_DIR / "dns_misconfig_config.txt"
-EVIDENCE_LOG_PATH = RAW_DIR / "dns_misconfig_evidence.log"
-METADATA_PATH = RAW_DIR / "dns_misconfig_metadata.json"
 
-# Written into h2's filesystem (shared with the host -- mininet network
-# namespaces don't isolate the filesystem) so the resolver process and
-# this orchestrating script can exchange state.
-SERVER_SCRIPT_PATH = "/tmp/dns_misconfig_server.py"
-STATE_PATH = "/tmp/dns_misconfig_state.txt"
-SERVER_LOG_PATH = "/tmp/dns_misconfig_server.log"
-
-# The resolver's own source, written to disk and launched on h2. Answers
-# every query correctly (real NOERROR + A record) but keeps no cache of
-# any kind -- every single query, including repeats of the same name,
-# is treated as a fresh miss. That's the misconfiguration: a resolver
-# that works, but never remembers what it already resolved.
-DNS_SERVER_SOURCE = f'''
-"""Minimal stdlib DNS responder for the DNS misconfiguration scenario.
-
-Deliberately has NO cache: every query, even a repeat of the exact same
-name, is answered as a fresh lookup. Tracks a running query count and
-writes it to a state file after every request so the orchestrating
-script can snapshot "resolver state" before/after traffic, the same way
-the ACL scenario snapshots iptables counters.
-"""
+def build_server_source(state_path: str) -> str:
+    """Source for the victim's resolver: answers every query correctly (real
+    NOERROR + A record) but keeps no cache -- every query, including repeats,
+    is a fresh lookup. It writes a running query count to a state file so the
+    orchestrator can snapshot resolver state before/after traffic."""
+    return f'''
 import socket
 import struct
 from datetime import datetime
 
 ANSWER_IP = "203.0.113.10"  # RFC 5737 TEST-NET-3 -- documentation-only address
 TTL = 5
-STATE_PATH = {STATE_PATH!r}
+STATE_PATH = {state_path!r}
 
-CACHE_ENABLED = False  # the misconfiguration: this is never consulted
+CACHE_ENABLED = False
 FORWARD_MODE = "always_external"
 
 
@@ -100,15 +87,15 @@ def parse_qname(data, offset=12):
 
 def build_response(query, qname_end_offset):
     txn_id = query[0:2]
-    flags = struct.pack("!H", 0x8180)  # standard response, recursion available, no error
+    flags = struct.pack("!H", 0x8180)
     header = txn_id + flags + struct.pack("!HHHH", 1, 1, 0, 0)
-    question = query[12:qname_end_offset + 4]  # qname + qtype(2) + qclass(2)
+    question = query[12:qname_end_offset + 4]
     answer = (
         b"\\xc0\\x0c"
-        + struct.pack("!H", 1)      # TYPE A
-        + struct.pack("!H", 1)      # CLASS IN
+        + struct.pack("!H", 1)
+        + struct.pack("!H", 1)
         + struct.pack("!I", TTL)
-        + struct.pack("!H", 4)      # RDLENGTH
+        + struct.pack("!H", 4)
         + socket.inet_aton(ANSWER_IP)
     )
     return header + question + answer
@@ -131,7 +118,7 @@ def main():
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(("0.0.0.0", 53))
-    print("[dns_misconfig_server] listening on UDP/53, cache_enabled=False", flush=True)
+    print("[resolver] listening on UDP/53, cache_enabled=False", flush=True)
 
     while True:
         try:
@@ -142,10 +129,8 @@ def main():
             total_queries_served += 1
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             write_state(total_queries_served, qname, now)
-            print(f"[dns_misconfig_server] answered query #{{total_queries_served}} "
-                  f"for {{qname}} from {{addr}} (no cache consulted)", flush=True)
-        except Exception as exc:  # noqa: BLE001 -- keep serving, don't die on one bad packet
-            print(f"[dns_misconfig_server] error handling packet: {{exc}}", flush=True)
+        except Exception as exc:  # noqa: BLE001 -- keep serving
+            print(f"[resolver] error: {{exc}}", flush=True)
 
 
 if __name__ == "__main__":
@@ -153,47 +138,34 @@ if __name__ == "__main__":
 '''
 
 
-def build_network():
-    """Build the h1/h2/s1 topology, matching basic_topology.py exactly
-    (same IPs, no controller, OVSSwitch in standalone fail mode)."""
+def build_network(h1_name, h1_ip, h2_name, h2_ip):
+    """Build the two-host topology (no controller, OVSSwitch standalone)."""
     print("*** Creating network")
 
-    net = Mininet(
-        controller=None,
-        switch=OVSSwitch
-    )
+    net = Mininet(controller=None, switch=OVSSwitch)
 
     print("*** Adding hosts")
-
-    h1 = net.addHost("h1", ip=f"{H1_IP}/24")
-    h2 = net.addHost("h2", ip=f"{H2_IP}/24")
+    h1 = net.addHost(h1_name, ip=f"{h1_ip}/24")
+    h2 = net.addHost(h2_name, ip=f"{h2_ip}/24")
 
     print("*** Adding switch")
-
     s1 = net.addSwitch("s1", failMode="standalone")
 
     print("*** Creating links")
-
     net.addLink(h1, s1)
     net.addLink(h2, s1)
 
     print("*** Starting network")
-
     net.start()
 
     print("*** Network started successfully")
-    print("h1 IP:", h1.IP())
-    print("h2 IP:", h2.IP())
-
+    print("source IP:", h1.IP())
+    print("victim IP:", h2.IP())
     return net, h1, h2
 
 
-def timestamp() -> str:
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-
 def parse_state(raw_state: str) -> dict:
-    """Parse the resolver's `key=value` state file into a dict."""
+    """Parse the resolver's key=value state file into a dict."""
     state = {}
     for line in raw_state.splitlines():
         if "=" in line:
@@ -202,179 +174,155 @@ def parse_state(raw_state: str) -> dict:
     return state
 
 
-def capture_state(h2) -> tuple[str, dict, str]:
-    """Cat the resolver's state file on h2 and return the raw text, the
-    parsed dict, and a timestamp string."""
-    raw = h2.cmd(f"cat {STATE_PATH}")
-    return raw, parse_state(raw), timestamp()
-
-
-def format_config_snapshot(raw_state: str, ts: str, label: str) -> str:
-    return (
-        f"--- {label} ({ts}) ---\n"
-        f"{raw_state.strip()}\n"
-    )
-
-
-def format_evidence_log(
-    before_raw: str, before_state: dict, before_ts: str,
-    after_raw: str, after_state: dict, after_ts: str,
-    num_queries: int, domain: str, traffic_start: str, traffic_end: str,
-) -> str:
-    """Build the evidence.log text, following the same before/traffic/
-    after format as acl_misconfig_firewall.log, but for DNS query counts
-    instead of iptables packet counters."""
-    before_served = int(before_state.get("total_queries_served", 0))
-    after_served = int(after_state.get("total_queries_served", 0))
-    before_cache = before_state.get("cache_entries", "0")
-    after_cache = after_state.get("cache_entries", "0")
-    delta = after_served - before_served
-
-    lines = [
-        "DNS Misconfiguration Scenario — Resolver Query Volume Log",
-        "Method: resolver query-counter state file sampled before/after "
-        "traffic generation (see dns_misconfig_config.txt for the full "
-        "resolver configuration snapshot).",
-        "",
-        "--- Checkpoint 1: Before any traffic ---",
-        f"[{before_ts}]",
-        f"Queries served: {before_served}",
-        f"Cache entries: {before_cache}",
-        "",
-        f"--- Traffic generated: {num_queries} dig queries from h1 to h2:{DNS_PORT} "
-        f"for {domain} ({traffic_start} to {traffic_end}) ---",
-        "",
-        "--- Checkpoint 2: After traffic ---",
-        f"[{after_ts}]",
-        f"Queries served: {after_served}",
-        f"Cache entries: {after_cache}",
-        f"Delta: +{delta} queries "
-        f"(0 served from cache — resolver never caches, confirming the misconfiguration)",
-        "",
-    ]
-    return "\n".join(lines)
-
-
 def main():
-    setLogLevel("info")
-    RAW_DIR.mkdir(parents=True, exist_ok=True)
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--pair", choices=list(PAIR_POOL), default="A",
+                    help="host pair from the shared pool (default A)")
+    ap.add_argument("--outdir", default=str(REPO_ROOT / "dataset" / "raw"),
+                    help="output directory (default <repo>/dataset/raw)")
+    args = ap.parse_args()
 
-    net, h1, h2 = build_network()
+    a_idx, b_idx = PAIR_POOL[args.pair]
+    h1_name, h2_name = f"h{a_idx}", f"h{b_idx}"
+    h1_ip, h2_ip = ip_of(a_idx), ip_of(b_idx)
+    scenario_id = f"{FAMILY}_{args.pair}"
+
+    out_dir = Path(args.outdir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pcap_path = out_dir / f"{scenario_id}.pcap"
+    evidence_path = out_dir / f"{scenario_id}_evidence.txt"
+    metadata_path = out_dir / f"{scenario_id}_metadata.json"
+
+    server_script_path = f"/tmp/{scenario_id}_server.py"
+    state_path = f"/tmp/{scenario_id}_state.txt"
+    server_log_path = f"/tmp/{scenario_id}_server.log"
+
+    setLogLevel("info")
+
+    net, h1, h2 = build_network(h1_name, h1_ip, h2_name, h2_ip)
     dns_pid = None
-    tcpdump_pid = None
+    tcpdump = None
+    delta = 0
+    rules_ok = False
 
     try:
-        # --- Step 2: write and start the DNS resolver on h2 ---
-        print("*** Writing DNS resolver script to h2's filesystem")
-        Path(SERVER_SCRIPT_PATH).write_text(DNS_SERVER_SOURCE, encoding="utf-8")
-
-        print("*** Starting DNS resolver on h2 (no cache, port 53)")
+        # --- write and start the resolver on the victim ---
+        print("*** Starting DNS resolver on victim (no cache, port 53)")
+        Path(server_script_path).write_text(build_server_source(state_path), encoding="utf-8")
         dns_pid = h2.cmd(
-            f"python3 {SERVER_SCRIPT_PATH} "
-            f"> {SERVER_LOG_PATH} 2>&1 & echo $!"
+            f"python3 {server_script_path} > {server_log_path} 2>&1 & echo $!"
         ).strip()
         time.sleep(1)
-        print(f"*** DNS resolver started on h2 (pid {dns_pid})")
 
-        # --- Step 5 (before): capture resolver state right after startup ---
-        print("*** Capturing BEFORE resolver state")
-        before_raw, before_state, before_ts = capture_state(h2)
-        print(before_raw)
+        # --- resolver state right after startup (raw cat) ---
+        before_raw = h2.cmd(f"cat {state_path}").strip()
+        before_state = parse_state(before_raw)
 
-        # --- Step 4: start tcpdump on h1 ---
+        # --- start tcpdump on the source host ---
+        # popen + SIGINT (not a backgrounded Host.cmd) so stopping it leaves no
+        # job-control message to desync the later evidence-capture commands.
         h1_intf = h1.defaultIntf().name
-        print(f"*** Starting tcpdump on h1 ({h1_intf})")
-        tcpdump_pid = h1.cmd(
-            f"tcpdump -i {h1_intf} -w {PCAP_PATH} -U "
-            f"> /tmp/dns_tcpdump.log 2>&1 & echo $!"
-        ).strip()
+        print(f"*** Starting tcpdump on {h1_name} ({h1_intf})")
+        tcpdump = h1.popen(["tcpdump", "-i", h1_intf, "-U", "-w", str(pcap_path)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(2)
-        print(f"*** tcpdump started on h1 (pid {tcpdump_pid})")
 
-        # --- Step 3: generate repeated DNS queries from h1 ---
-        print(f"*** Sending {NUM_QUERIES} dig queries from h1 for "
-              f"{QUERY_DOMAIN} (expected to all resolve, none cached)")
-        traffic_start = timestamp()
+        # --- repeated DNS queries from the source host ---
+        print(f"*** Sending {NUM_QUERIES} dig queries from {h1_name} for {QUERY_DOMAIN}")
         for i in range(1, NUM_QUERIES + 1):
             result = h1.cmd(
-                f"dig @{H2_IP} -p {DNS_PORT} {QUERY_DOMAIN} "
+                f"dig @{h2_ip} -p {DNS_PORT} {QUERY_DOMAIN} "
                 f"+time={DIG_TIMEOUT} +tries=1 +short"
             ).strip()
             print(f"    query {i}/{NUM_QUERIES}: resolved='{result or 'NO RESPONSE'}'")
             time.sleep(QUERY_SLEEP_BETWEEN)
-        traffic_end = timestamp()
 
         # --- stop tcpdump ---
         print("*** Stopping tcpdump")
-        h1.cmd(f"kill {tcpdump_pid}")
-        time.sleep(2)
-        h1.cmd(f"kill -0 {tcpdump_pid} 2>/dev/null && kill -9 {tcpdump_pid}")
-        tcpdump_pid = None
+        tcpdump.send_signal(signal.SIGINT)
+        try:
+            tcpdump.wait(timeout=5)
+        except Exception:
+            tcpdump.kill()
+        tcpdump = None
+        time.sleep(1)
 
-        # --- Step 5 (after): capture resolver state again ---
-        print("*** Capturing AFTER resolver state")
-        after_raw, after_state, after_ts = capture_state(h2)
-        print(after_raw)
+        # --- resolver state after traffic (raw cat) ---
+        after_raw = h2.cmd(f"cat {state_path}").strip()
+        after_state = parse_state(after_raw)
+        delta = (int(after_state.get("total_queries_served", 0))
+                 - int(before_state.get("total_queries_served", 0)))
 
-        # --- Step 5: write config snapshot (before + after) ---
-        print("*** Writing dns_misconfig_config.txt")
-        config_text = (
-            "DNS Misconfiguration Scenario — Resolver Configuration Snapshot\n"
-            "dnsmasq was not available in this environment; h2 runs a minimal "
-            "stdlib DNS responder configured to never cache and always resolve "
-            "fresh (see mininet/scenarios/dns_misconfig.py for its source).\n\n"
-            + format_config_snapshot(before_raw, before_ts, "BEFORE traffic (server startup)")
-            + "\n"
-            + format_config_snapshot(after_raw, after_ts, "AFTER traffic")
-        )
-        CONFIG_PATH.write_text(config_text, encoding="utf-8")
+        # --- capture evidence AFTER traffic, same format for every scenario ---
+        print("*** Capturing evidence (firewall rules + counters + log trail + resolver state)")
+        rule_text, rules_ok, _restrictive = capture_rule_sections([h1, h2])
+        log_trail = capture_log_trail(h2, h1_ip)
+        # No /tmp path here: it embeds the scenario id and would leak the label.
+        resolver_state = ("resolver state (before traffic):\n%s\n\n"
+                          "resolver state (after traffic):\n%s" % (before_raw, after_raw))
+        evidence_text = build_evidence([
+            ("Host firewall rules and INPUT counters", rule_text),
+            ("Kernel netfilter log-trail check", log_trail),
+            ("Local DNS resolver state (before and after traffic)", resolver_state),
+        ])
+        evidence_path.write_text(evidence_text, encoding="utf-8")
 
-        # --- Step 6: write evidence.log ---
-        print("*** Writing dns_misconfig_evidence.log")
-        evidence_text = format_evidence_log(
-            before_raw, before_state, before_ts,
-            after_raw, after_state, after_ts,
-            NUM_QUERIES, QUERY_DOMAIN, traffic_start, traffic_end,
-        )
-        EVIDENCE_LOG_PATH.write_text(evidence_text, encoding="utf-8")
-
-        # --- Step 7: write ground-truth metadata ---
+        # --- write ground-truth metadata (normalized NetDefend-Bench schema) ---
         print("*** Writing metadata.json")
+        pcap_verified = delta == NUM_QUERIES
+        verification_notes = []
+        if not pcap_verified:
+            verification_notes.append(
+                f"resolver served {delta} queries, expected {NUM_QUERIES} "
+                "(some dig queries may have timed out)")
         metadata = {
-            "scenario": "DNS_MISCONFIGURATION",
+            "scenario_id": scenario_id,
+            "family": FAMILY,
             "ground_truth": "MISCONFIGURATION",
-            "source": H1_IP,
-            "destination": H2_IP,
+            "scenario_type": "CONTROLLED_LAB_TRAFFIC",
+            "source_ip": h1_ip,
+            "destination_ip": h2_ip,
+            "generator": "python3 stdlib DNS responder + tcpdump (this script); "
+                         "standalone OVS switch, no controller",
+            "tool": "stdlib DNS responder + dig + tcpdump",
+            "attack_technique": None,
+            "label_basis": "operator misconfiguration reproduced by script; intent-labelled",
+            "pcap_file": pcap_path.name,
+            "evidence_file": evidence_path.name,
+            "notes": (
+                "A resolver that never caches re-resolves every repeated query, "
+                "producing a sustained query-volume spike. Ground truth is "
+                "recorded only in this *_metadata.json; the evidence file carries "
+                "no label."),
             "protocol": "DNS",
             "destination_port": DNS_PORT,
             "action": "REPEATED_QUERY_NO_CACHE",
-            "description": (
-                "A misconfigured DNS resolver on h2 fails to cache responses, "
-                "causing repeated external queries for the same domain that "
-                "superficially resemble a DNS tunneling exfiltration pattern."
-            ),
+            "pcap_verified": pcap_verified,
+            "verified_packets": {"queries_served_delta": delta,
+                                 "queries_sent": NUM_QUERIES},
+            "verification_notes": verification_notes,
+            "rules_verified": rules_ok,
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
         }
-        METADATA_PATH.write_text(
-            json.dumps(metadata, indent=4), encoding="utf-8"
-        )
+        metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
     finally:
-        # --- Step 8: clean up background processes and tear down net ---
         print("*** Cleaning up")
         if dns_pid:
             h2.cmd(f"kill {dns_pid}")
-        if tcpdump_pid:
-            h1.cmd(f"kill {tcpdump_pid}")
+        if tcpdump is not None:
+            tcpdump.kill()
         print("*** Stopping network")
         net.stop()
 
-    # --- Final self-check: confirm output files exist with real content ---
     print("\n*** Output file summary")
-    for path in (PCAP_PATH, CONFIG_PATH, EVIDENCE_LOG_PATH, METADATA_PATH):
+    for path in (pcap_path, evidence_path, metadata_path):
         if path.exists():
             print(f"    {path}: {path.stat().st_size} bytes")
         else:
             print(f"    {path}: MISSING")
+    print(f"*** {scenario_id}: pcap_verified={delta == NUM_QUERIES} rules_verified={rules_ok}")
 
 
 if __name__ == "__main__":

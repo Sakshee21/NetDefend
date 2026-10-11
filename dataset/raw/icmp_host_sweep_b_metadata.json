@@ -1,0 +1,44 @@
+{
+  "scenario_id": "icmp_host_sweep_b",
+  "family": "icmp_host_sweep",
+  "ground_truth": "ATTACK",
+  "scenario_type": "CONTROLLED_LAB_TRAFFIC",
+  "source_ip": "10.0.0.3",
+  "destination_ip": null,
+  "generator": "python3 + scapy 2.5.0 (this script); standalone Open vSwitch bridge",
+  "tool": "Python 3 with Scapy",
+  "attack_technique": "T1018",
+  "label_basis": "simulated by script; intent-labelled",
+  "pcap_file": "icmp_host_sweep_b.pcap",
+  "evidence_file": "icmp_host_sweep_b_evidence.txt",
+  "notes": "Controlled-lab icmp_host_sweep (variant b), attacker h3 -> victim h4. Ground truth is recorded only in this *_metadata.json; no file an agent reads carries the label.",
+  "destination_ips": [
+    "10.0.0.1",
+    "10.0.0.2",
+    "10.0.0.4",
+    "10.0.0.5",
+    "10.0.0.6",
+    "10.0.0.7",
+    "10.0.0.8",
+    "10.0.0.9",
+    "10.0.0.10"
+  ],
+  "parameters": {
+    "delay": 0.2
+  },
+  "listener_on_victim": null,
+  "expected_packets": {
+    "echo_requests": 9,
+    "distinct_hosts": 9
+  },
+  "verified_packets": {
+    "echo_requests": 9,
+    "distinct_hosts": 9
+  },
+  "pcap_verified": true,
+  "verification_notes": [],
+  "rules_verified": true,
+  "restrictive_rules_found": false,
+  "duration_s": 4.19,
+  "generated_at": "2026-10-11T11:54:31"
+}

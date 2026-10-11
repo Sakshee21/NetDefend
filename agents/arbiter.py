@@ -225,14 +225,23 @@ def _defender_view(pkg: dict) -> dict:
 # RESOLUTION PATHS
 # ======================================================
 
-def _run_adversarial_exchange(attack: dict, misconfig: dict) -> dict:
+def _run_adversarial_exchange(attack: dict, misconfig: dict, cross_flow: dict) -> dict:
     """The real dialectical path: challenge -> isolated defences -> verdict.
-    Raises on any unrecoverable LLM failure so run_arbiter() can fall back."""
+    Raises on any unrecoverable LLM failure so run_arbiter() can fall back.
+
+    ``cross_flow`` is the shared cross-flow evidence both hypotheses were built
+    from (fan-out, prior handshakes, retry regularity). It is given to the
+    challenger and the adjudicator -- who see everything anyway -- so they can
+    press and judge on scan-vs-legitimate-client signals. It is NOT handed to
+    the isolated defenders, which stay limited to their own evidence."""
+    shared = "\n\nShared cross-flow evidence (both hypotheses were built from " \
+             "this; use it to sharpen the challenges):\n" + json.dumps(cross_flow, indent=2)
     # 1. Challenger sees both hypotheses, crafts a challenge against each.
     challenges = _call_json(
         _CHALLENGER_SYSTEM,
         "ATTACK hypothesis:\n" + json.dumps(attack, indent=2) +
-        "\n\nMISCONFIGURATION hypothesis:\n" + json.dumps(misconfig, indent=2),
+        "\n\nMISCONFIGURATION hypothesis:\n" + json.dumps(misconfig, indent=2) +
+        shared,
         text_keys=("challenge_to_attack", "challenge_to_misconfiguration"),
     )
     challenge_to_attack = challenges["challenge_to_attack"].strip()
@@ -268,7 +277,8 @@ def _run_adversarial_exchange(attack: dict, misconfig: dict) -> dict:
         "\n\nChallenge put to the ATTACK hypothesis:\n" + challenge_to_attack +
         "\nATTACK hypothesis's response:\n" + attack_response +
         "\n\nChallenge put to the MISCONFIGURATION hypothesis:\n" + challenge_to_misconfig +
-        "\nMISCONFIGURATION hypothesis's response:\n" + misconfig_response,
+        "\nMISCONFIGURATION hypothesis's response:\n" + misconfig_response +
+        shared,
         text_keys=("classification", "reasoning"),
         numeric_keys=("confidence",),
     )
@@ -414,6 +424,7 @@ def run_arbiter(state: NetDefendState) -> dict:
 
     attack = _attack_package(state)
     misconfig = _misconfig_package(state)
+    cross_flow = state.get("cross_flow_pattern") or {}
     attack_broken = _attack_failed(state)
     misconfig_broken = _misconfig_failed(state)
 
@@ -427,7 +438,7 @@ def run_arbiter(state: NetDefendState) -> dict:
     # Both hypotheses are real: run the genuine adversarial exchange, with a
     # transparent rule-based fallback if the LLM machinery cannot complete.
     try:
-        return _run_adversarial_exchange(attack, misconfig)
+        return _run_adversarial_exchange(attack, misconfig, cross_flow)
     except Exception as exc:  # noqa: BLE001 -- degrade gracefully, don't crash the pipeline
         print(f"[Dialectical Arbiter] adversarial exchange failed: {exc}")
         return _rule_based_fallback(attack, misconfig)

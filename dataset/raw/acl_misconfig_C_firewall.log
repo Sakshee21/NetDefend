@@ -1,0 +1,15 @@
+ACL Misconfiguration Scenario — Firewall Rule Counter Log
+Method: iptables -L INPUT -n -v counters sampled before/after traffic generation. Kernel LOG target output (dmesg/syslog) unavailable in this WSL environment.
+
+--- Checkpoint 1: Before any traffic ---
+[2026-10-11 00:34:57]
+LOG rule:  pkts=0   bytes=0
+DROP rule: pkts=0   bytes=0
+
+--- Traffic generated: 10 curl attempts from 10.0.0.5 to 10.0.0.6:8000 (2026-10-11 00:34:59 to 2026-10-11 00:35:29) ---
+
+--- Checkpoint 2: After traffic ---
+[2026-10-11 00:35:31]
+LOG rule:  pkts=20   bytes=1200
+DROP rule: pkts=20   bytes=1200
+Delta: +20 packets

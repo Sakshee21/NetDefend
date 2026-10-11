@@ -1,0 +1,41 @@
+=== Host firewall rules and INPUT counters ===
+[h1 10.0.0.1] $ /usr/sbin/iptables -S  (exit 0)
+-P INPUT ACCEPT
+-P FORWARD ACCEPT
+-P OUTPUT ACCEPT
+
+[h1 10.0.0.1] $ /usr/sbin/iptables -L INPUT -v -n -x  (exit 0)
+Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
+    pkts      bytes target     prot opt in     out     source               destination
+
+[h1 10.0.0.1] $ /usr/sbin/nft list ruleset  (exit 0)
+(empty)
+
+[h2 10.0.0.2] $ /usr/sbin/iptables -S  (exit 0)
+-P INPUT ACCEPT
+-P FORWARD ACCEPT
+-P OUTPUT ACCEPT
+-A INPUT -s 10.0.0.1/32 -p tcp -m tcp --dport 8000 -j LOG --log-prefix "ACL_BLOCK: "
+-A INPUT -s 10.0.0.1/32 -p tcp -m tcp --dport 8000 -j DROP
+
+[h2 10.0.0.2] $ /usr/sbin/iptables -L INPUT -v -n -x  (exit 0)
+Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
+    pkts      bytes target     prot opt in     out     source               destination         
+      20     1200 LOG        tcp  --  *      *       10.0.0.1             0.0.0.0/0            tcp dpt:8000 LOG flags 0 level 4 prefix "ACL_BLOCK: "
+      20     1200 DROP       tcp  --  *      *       10.0.0.1             0.0.0.0/0            tcp dpt:8000
+
+[h2 10.0.0.2] $ /usr/sbin/nft list ruleset  (exit 0)
+table ip filter {
+	chain INPUT {
+		type filter hook input priority filter; policy accept;
+		meta l4proto tcp ip saddr 10.0.0.1 tcp dport 8000 counter packets 20 bytes 1200 log prefix "ACL_BLOCK: "
+		meta l4proto tcp ip saddr 10.0.0.1 tcp dport 8000 counter packets 20 bytes 1200 drop
+	}
+}
+
+=== Kernel netfilter log-trail check ===
+$ dmesg | grep -iE 'SRC=10.0.0.1'
+(no matching lines)
+
+$ journalctl -k --no-pager -n 200 | grep -iE 'SRC=10.0.0.1'
+(no matching lines)

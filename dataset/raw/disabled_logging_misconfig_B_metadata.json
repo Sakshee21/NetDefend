@@ -1,0 +1,26 @@
+{
+  "scenario_id": "disabled_logging_misconfig_B",
+  "family": "disabled_logging_misconfig",
+  "ground_truth": "MISCONFIGURATION",
+  "scenario_type": "CONTROLLED_LAB_TRAFFIC",
+  "source_ip": "10.0.0.3",
+  "destination_ip": "10.0.0.4",
+  "generator": "python3 + iptables/tcpdump (this script); standalone OVS switch, no controller",
+  "tool": "iptables + curl + tcpdump",
+  "attack_technique": null,
+  "label_basis": "operator misconfiguration reproduced by script; intent-labelled",
+  "pcap_file": "disabled_logging_misconfig_B.pcap",
+  "evidence_file": "disabled_logging_misconfig_B_evidence.txt",
+  "notes": "A firewall rule blocks traffic but has no accompanying logging rule, so blocked traffic leaves no audit trail. Ground truth is recorded only in this *_metadata.json; the evidence file carries no label.",
+  "protocol": "TCP",
+  "destination_port": 8000,
+  "action": "DROP_NO_LOG",
+  "pcap_verified": true,
+  "verified_packets": {
+    "drop_counter_packets": 20,
+    "curl_attempts": 10
+  },
+  "verification_notes": [],
+  "rules_verified": true,
+  "generated_at": "2026-10-11T11:59:05"
+}

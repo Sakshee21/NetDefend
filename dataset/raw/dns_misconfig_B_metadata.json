@@ -1,0 +1,26 @@
+{
+  "scenario_id": "dns_misconfig_B",
+  "family": "dns_misconfig",
+  "ground_truth": "MISCONFIGURATION",
+  "scenario_type": "CONTROLLED_LAB_TRAFFIC",
+  "source_ip": "10.0.0.3",
+  "destination_ip": "10.0.0.4",
+  "generator": "python3 stdlib DNS responder + tcpdump (this script); standalone OVS switch, no controller",
+  "tool": "stdlib DNS responder + dig + tcpdump",
+  "attack_technique": null,
+  "label_basis": "operator misconfiguration reproduced by script; intent-labelled",
+  "pcap_file": "dns_misconfig_B.pcap",
+  "evidence_file": "dns_misconfig_B_evidence.txt",
+  "notes": "A resolver that never caches re-resolves every repeated query, producing a sustained query-volume spike. Ground truth is recorded only in this *_metadata.json; the evidence file carries no label.",
+  "protocol": "DNS",
+  "destination_port": 53,
+  "action": "REPEATED_QUERY_NO_CACHE",
+  "pcap_verified": true,
+  "verified_packets": {
+    "queries_served_delta": 18,
+    "queries_sent": 18
+  },
+  "verification_notes": [],
+  "rules_verified": true,
+  "generated_at": "2026-10-11T11:57:32"
+}

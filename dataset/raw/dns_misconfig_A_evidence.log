@@ -1,0 +1,15 @@
+DNS Misconfiguration Scenario — Resolver Query Volume Log
+Method: resolver query-counter state file sampled before/after traffic generation (see the _config.txt for the full resolver configuration snapshot).
+
+--- Checkpoint 1: Before any traffic ---
+[2026-10-11 00:35:33]
+Queries served: 0
+Cache entries: 0
+
+--- Traffic generated: 18 dig queries from 10.0.0.1 to 10.0.0.2:53 for example.com (2026-10-11 00:35:35 to 2026-10-11 00:35:54) ---
+
+--- Checkpoint 2: After traffic ---
+[2026-10-11 00:35:56]
+Queries served: 18
+Cache entries: 0
+Delta: +18 queries (0 served from cache — resolver never caches)

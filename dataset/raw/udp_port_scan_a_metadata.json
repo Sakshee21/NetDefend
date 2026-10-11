@@ -1,0 +1,36 @@
+{
+  "scenario_id": "udp_port_scan_a",
+  "family": "udp_port_scan",
+  "ground_truth": "ATTACK",
+  "scenario_type": "CONTROLLED_LAB_TRAFFIC",
+  "source_ip": "10.0.0.1",
+  "destination_ip": "10.0.0.2",
+  "generator": "python3 + scapy 2.5.0 (this script); standalone Open vSwitch bridge",
+  "tool": "Python 3 with Scapy",
+  "attack_technique": "T1046",
+  "label_basis": "simulated by script; intent-labelled",
+  "pcap_file": "udp_port_scan_a.pcap",
+  "evidence_file": "udp_port_scan_a_evidence.txt",
+  "notes": "Controlled-lab udp_port_scan (variant a), attacker h1 -> victim h2. Ground truth is recorded only in this *_metadata.json; no file an agent reads carries the label.",
+  "destination_ips": null,
+  "parameters": {
+    "port_lo": 1,
+    "port_hi": 30,
+    "delay": 0.01
+  },
+  "listener_on_victim": null,
+  "expected_packets": {
+    "udp_packets": 30,
+    "ports": "1-30"
+  },
+  "verified_packets": {
+    "udp_packets": 30,
+    "ports": "1-30"
+  },
+  "pcap_verified": true,
+  "verification_notes": [],
+  "rules_verified": true,
+  "restrictive_rules_found": false,
+  "duration_s": 3.32,
+  "generated_at": "2026-10-11T11:53:22"
+}

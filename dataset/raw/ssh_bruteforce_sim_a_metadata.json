@@ -1,0 +1,37 @@
+{
+  "scenario_id": "ssh_bruteforce_sim_a",
+  "family": "ssh_bruteforce_sim",
+  "ground_truth": "ATTACK",
+  "scenario_type": "CONTROLLED_LAB_TRAFFIC",
+  "source_ip": "10.0.0.1",
+  "destination_ip": "10.0.0.2",
+  "generator": "python3 + scapy 2.5.0 (this script); standalone Open vSwitch bridge",
+  "tool": "Python 3 with Scapy and sockets",
+  "attack_technique": "T1110",
+  "label_basis": "simulated by script; intent-labelled",
+  "pcap_file": "ssh_bruteforce_sim_a.pcap",
+  "evidence_file": "ssh_bruteforce_sim_a_evidence.txt",
+  "notes": "Controlled-lab ssh_bruteforce_sim (variant a), attacker h1 -> victim h2. Ground truth is recorded only in this *_metadata.json; no file an agent reads carries the label.",
+  "destination_ips": null,
+  "parameters": {
+    "count": 30,
+    "dport": 22,
+    "delay": 0.1,
+    "payload": "SSH-2.0-sim_client\r\n"
+  },
+  "listener_on_victim": "banner",
+  "expected_packets": {
+    "connection_attempts": 30,
+    "dport": 22
+  },
+  "verified_packets": {
+    "connection_attempts": 30,
+    "dport": 22
+  },
+  "pcap_verified": true,
+  "verification_notes": [],
+  "rules_verified": true,
+  "restrictive_rules_found": false,
+  "duration_s": 4.98,
+  "generated_at": "2026-10-11T11:54:41"
+}

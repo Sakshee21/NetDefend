@@ -1,0 +1,26 @@
+{
+  "scenario_id": "acl_misconfig_C",
+  "family": "acl_misconfig",
+  "ground_truth": "MISCONFIGURATION",
+  "scenario_type": "CONTROLLED_LAB_TRAFFIC",
+  "source_ip": "10.0.0.5",
+  "destination_ip": "10.0.0.6",
+  "generator": "python3 + iptables/tcpdump (this script); standalone OVS switch, no controller",
+  "tool": "iptables + curl + tcpdump",
+  "attack_technique": null,
+  "label_basis": "operator misconfiguration reproduced by script; intent-labelled",
+  "pcap_file": "acl_misconfig_C.pcap",
+  "evidence_file": "acl_misconfig_C_evidence.txt",
+  "notes": "Legitimate HTTP traffic from the source host to the victim is blocked by a misordered firewall rule (DROP shadows LOG). Ground truth is recorded only in this *_metadata.json; the evidence file carries no label.",
+  "protocol": "TCP",
+  "destination_port": 8000,
+  "action": "DROP",
+  "pcap_verified": true,
+  "verified_packets": {
+    "drop_counter_packets": 20,
+    "curl_attempts": 10
+  },
+  "verification_notes": [],
+  "rules_verified": true,
+  "generated_at": "2026-10-11T11:56:45"
+}

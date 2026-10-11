@@ -1,0 +1,37 @@
+{
+  "scenario_id": "tcp_slow_scan_a",
+  "family": "tcp_slow_scan",
+  "ground_truth": "ATTACK",
+  "scenario_type": "CONTROLLED_LAB_TRAFFIC",
+  "source_ip": "10.0.0.3",
+  "destination_ip": "10.0.0.4",
+  "generator": "python3 + scapy 2.5.0 (this script); standalone Open vSwitch bridge",
+  "tool": "Python 3 with Scapy",
+  "attack_technique": "T1046",
+  "label_basis": "simulated by script; intent-labelled",
+  "pcap_file": "tcp_slow_scan_a.pcap",
+  "evidence_file": "tcp_slow_scan_a_evidence.txt",
+  "notes": "Controlled-lab tcp_slow_scan (variant a), attacker h3 -> victim h4. Ground truth is recorded only in this *_metadata.json; no file an agent reads carries the label.",
+  "destination_ips": null,
+  "parameters": {
+    "port_lo": 20,
+    "port_hi": 34,
+    "delay": 0.5
+  },
+  "listener_on_victim": null,
+  "expected_packets": {
+    "syn_packets": 15,
+    "ports": "20-34"
+  },
+  "verified_packets": {
+    "syn_packets": 15,
+    "ports": "20-34",
+    "median_gap_s": 0.537
+  },
+  "pcap_verified": true,
+  "verification_notes": [],
+  "rules_verified": true,
+  "restrictive_rules_found": false,
+  "duration_s": 9.88,
+  "generated_at": "2026-10-11T11:53:43"
+}

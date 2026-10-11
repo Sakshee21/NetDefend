@@ -451,7 +451,9 @@ def _build_incident_evidence(state: NetDefendState) -> dict:
         print(f"[Network Troubleshooting Agent] log evidence loaded from "
               f"{log_path} ({len(raw_log)} bytes)")
     else:
-        log_evidence["note"] = f"log_path not found or not provided: {log_path!r}"
+        # Neutral note only -- never echo the log_path into the prompt, since a
+        # scenario-named path (e.g. acl_misconfig_B...) would leak the label.
+        log_evidence["note"] = "no log evidence available"
         print(f"[Network Troubleshooting Agent] WARNING: log_path not found: {log_path!r}")
 
     context = {

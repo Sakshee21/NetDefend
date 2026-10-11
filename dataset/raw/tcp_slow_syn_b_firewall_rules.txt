@@ -1,0 +1,15 @@
+[h3 10.0.0.3] $ /usr/sbin/iptables -S  (exit 0)
+-P INPUT ACCEPT
+-P FORWARD ACCEPT
+-P OUTPUT ACCEPT
+
+[h3 10.0.0.3] $ /usr/sbin/nft list ruleset  (exit 0)
+
+
+[h4 10.0.0.4] $ /usr/sbin/iptables -S  (exit 0)
+-P INPUT ACCEPT
+-P FORWARD ACCEPT
+-P OUTPUT ACCEPT
+
+[h4 10.0.0.4] $ /usr/sbin/nft list ruleset  (exit 0)
+

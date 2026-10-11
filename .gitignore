@@ -28,4 +28,7 @@ Thumbs.db
 experiments/results/*.csv
 logs/*.log
 
+# LaTeX paper — kept local, never pushed
+paper/
+
 CLAUDE.md

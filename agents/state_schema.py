@@ -22,13 +22,20 @@ class NetDefendState(TypedDict):
     # to surface repeated connection attempts to the same target that no
     # single flow's packet_features can show (e.g. 10 blocked SYNs, each
     # from a different ephemeral source port, so each is its own flow).
-    # Never fed into the Intrusion Detection Agent's ML models -- those
-    # stay strictly per-flow. See agents/packet_agent.py's
-    # _compute_cross_flow_pattern().
+    # Also carries scan-vs-legitimate-client discriminators for the busiest
+    # (non-noise) source: how far it fans out, whether it had prior completed
+    # handshakes to the target, and how regular its retries are. Never fed
+    # into the Intrusion Detection Agent's ML models -- those stay strictly
+    # per-flow. See agents/packet_agent.py's _compute_cross_flow_pattern().
     # {"destination": {"ip": str|None, "port": int|None}, "flow_count": int,
     #  "total_syn_count": int, "total_synack_count": int,
     #  "time_span_s": float,
-    #  "pattern": "repeated_blocked_attempts" | "none_detected"}
+    #  "pattern": "repeated_blocked_attempts" | "none_detected",
+    #  "subject_source": str|None,     # source IP the discriminators describe
+    #  "distinct_dst_ports": int,      # distinct dst ports that source hit
+    #  "distinct_dst_hosts": int,      # distinct dst IPs that source hit
+    #  "prior_successful_flows": int,  # its flows to target with a SYN-ACK
+    #  "retry_interval_cv": float|None}  # CV of gaps between attempts to target
     cross_flow_pattern: Optional[dict]
 
     # --- Intrusion Detection Agent ---------------------------------------
