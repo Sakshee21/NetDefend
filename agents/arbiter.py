@@ -364,46 +364,100 @@ def _resolve_with_broken_hypothesis(
     return {"refutation_exchange": refutation_exchange, "arbiter_verdict": verdict}
 
 
-def _rule_based_fallback(attack: dict, misconfig: dict) -> dict:
-    """Reached only when the adversarial LLM machinery could not complete.
-    Higher prior confidence wins. The reasoning carries a fixed sentinel so
-    downstream eval/ablation code can tell this apart from a genuine
-    LLM-adjudicated verdict."""
-    attack_conf = _conf(attack["confidence"])
-    misconfig_conf = _conf(misconfig["confidence"])
+# def _rule_based_fallback(attack: dict, misconfig: dict) -> dict:
+#     """Reached only when the adversarial LLM machinery could not complete.
+#     Higher prior confidence wins. The reasoning carries a fixed sentinel so
+#     downstream eval/ablation code can tell this apart from a genuine
+#     LLM-adjudicated verdict."""
+#     attack_conf = _conf(attack["confidence"])
+#     misconfig_conf = _conf(misconfig["confidence"])
 
-    if attack_conf > misconfig_conf:
-        classification, confidence = "ATTACK", attack_conf
-    elif misconfig_conf > attack_conf:
-        classification, confidence = "MISCONFIGURATION", misconfig_conf
-    else:
-        classification, confidence = "UNCERTAIN", attack_conf
+#     if attack_conf > misconfig_conf:
+#         classification, confidence = "ATTACK", attack_conf
+#     elif misconfig_conf > attack_conf:
+#         classification, confidence = "MISCONFIGURATION", misconfig_conf
+#     else:
+#         classification, confidence = "UNCERTAIN", attack_conf
+
+#     verdict = {
+#         "classification": classification,
+#         "confidence": round(confidence, 2),
+#         "reasoning": (
+#             "fallback rule used — full adversarial exchange could not "
+#             f"complete. Chose the higher-confidence hypothesis "
+#             f"(attack={attack_conf:.2f}, misconfiguration={misconfig_conf:.2f})."
+#         ),
+#     }
+#     if classification == "UNCERTAIN":
+#         verdict["escalation"] = _UNCERTAIN_ESCALATION
+
+#     refutation_exchange = [
+#         {"challenged_agent": "threat_hunting",
+#          "challenge": "(adversarial exchange unavailable — LLM calls failed)",
+#          "response": "(unavailable)"},
+#         {"challenged_agent": "troubleshooting",
+#          "challenge": "(adversarial exchange unavailable — LLM calls failed)",
+#          "response": "(unavailable)"},
+#     ]
+#     print(f"[Dialectical Arbiter] verdict (rule-based fallback): "
+#           f"{classification} ({confidence:.2f})")
+#     return {"refutation_exchange": refutation_exchange, "arbiter_verdict": verdict}
+
+def _rule_based_fallback(attack: dict, misconfig: dict) -> dict:
+    """Return UNCERTAIN when LLM adjudication cannot complete.
+
+    Confidence values alone are not sufficient to distinguish an attack
+    from a network misconfiguration. Preserve both hypotheses for review
+    rather than automatically selecting the higher-confidence hypothesis.
+    """
+    attack_conf = _conf(attack.get("confidence", 0.0))
+    misconfig_conf = _conf(misconfig.get("confidence", 0.0))
+
+    classification = "UNCERTAIN"
+    confidence = 0.0
+
+    reasoning = (
+        "The adversarial exchange could not complete, so the hypotheses "
+        "were not successfully adjudicated. Confidence scores alone do "
+        "not establish whether this incident is an attack or a "
+        "misconfiguration. Returning UNCERTAIN and requesting human review. "
+        f"Available hypothesis confidences: attack={attack_conf:.2f}, "
+        f"misconfiguration={misconfig_conf:.2f}."
+    )
 
     verdict = {
         "classification": classification,
-        "confidence": round(confidence, 2),
-        "reasoning": (
-            "fallback rule used — full adversarial exchange could not "
-            f"complete. Chose the higher-confidence hypothesis "
-            f"(attack={attack_conf:.2f}, misconfiguration={misconfig_conf:.2f})."
-        ),
+        "confidence": confidence,
+        "reasoning": reasoning,
+        "escalation": _UNCERTAIN_ESCALATION,
     }
-    if classification == "UNCERTAIN":
-        verdict["escalation"] = _UNCERTAIN_ESCALATION
 
     refutation_exchange = [
-        {"challenged_agent": "threat_hunting",
-         "challenge": "(adversarial exchange unavailable — LLM calls failed)",
-         "response": "(unavailable)"},
-        {"challenged_agent": "troubleshooting",
-         "challenge": "(adversarial exchange unavailable — LLM calls failed)",
-         "response": "(unavailable)"},
+        {
+            "challenged_agent": "threat_hunting",
+            "challenge": (
+                "(unavailable — adversarial LLM exchange failed)"
+            ),
+            "response": "(unavailable)",
+        },
+        {
+            "challenged_agent": "troubleshooting",
+            "challenge": (
+                "(unavailable — adversarial LLM exchange failed)"
+            ),
+            "response": "(unavailable)",
+        },
     ]
-    print(f"[Dialectical Arbiter] verdict (rule-based fallback): "
-          f"{classification} ({confidence:.2f})")
-    return {"refutation_exchange": refutation_exchange, "arbiter_verdict": verdict}
 
+    print(
+        "[Dialectical Arbiter] verdict (safe fallback): "
+        f"{classification} ({confidence:.2f})"
+    )
 
+    return {
+        "refutation_exchange": refutation_exchange,
+        "arbiter_verdict": verdict,
+    }
 # ======================================================
 # ENTRY POINT
 # ======================================================
