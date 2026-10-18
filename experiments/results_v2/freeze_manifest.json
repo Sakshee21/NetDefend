@@ -1,0 +1,365 @@
+{
+  "created_utc": "2026-10-18T12:39:02.305426+00:00",
+  "purpose": "v2 freeze manifest -- integrity of code, models and the 23 benchmark scenarios' evidence/metadata before the v2/v2 run",
+  "benchmark_scenario_count": 23,
+  "benchmark_scenarios": [
+    "acl_misconfig_A",
+    "acl_misconfig_B",
+    "acl_misconfig_C",
+    "disabled_logging_misconfig_A",
+    "disabled_logging_misconfig_B",
+    "disabled_logging_misconfig_C",
+    "dns_misconfig_A",
+    "dns_misconfig_B",
+    "dns_misconfig_C",
+    "http_request_flood_a",
+    "icmp_host_sweep_a",
+    "icmp_host_sweep_b",
+    "ssh_bruteforce_sim_a",
+    "ssh_bruteforce_sim_b",
+    "tcp_port_scan_a",
+    "tcp_port_scan_b",
+    "tcp_slow_scan_a",
+    "tcp_slow_syn_a",
+    "tcp_slow_syn_b",
+    "tcp_syn_burst_a",
+    "tcp_syn_burst_b",
+    "udp_port_scan_a",
+    "udp_port_scan_b"
+  ],
+  "file_count": 83,
+  "files": {
+    "agents/__init__.py": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "agents/arbiter.py": {
+      "sha256": "94dbd0b6c7950d79d9e2641af560f5d2520ebf8f2ad73f39a706bc53a42f0536",
+      "bytes": 29030
+    },
+    "agents/config.py": {
+      "sha256": "b6e1b8f2538caadde4324ef6f61127a365c5aacc9fb98fc19cb66b6e7ca4ecda",
+      "bytes": 1570
+    },
+    "agents/evidence_builder.py": {
+      "sha256": "86cfdd074e0dfd6948a72ee04ee46f2171910fd2b6512db589791cf8cb3206a0",
+      "bytes": 10764
+    },
+    "agents/graph.py": {
+      "sha256": "ace329d222dc0e02531c90319a1982c3b55bd7bf589d7c4011f8545b2fb59110",
+      "bytes": 5592
+    },
+    "agents/grounding.py": {
+      "sha256": "6eeb48c9bb3b4cf19f84b32caaf35f34a4a19debdafdf795204fb16324ca51e1",
+      "bytes": 10494
+    },
+    "agents/intrusion_agent.py": {
+      "sha256": "e057ffb9e14252811302039fb6551593a2bb8605e62812b080549067fbdd5f3e",
+      "bytes": 5043
+    },
+    "agents/llm_client.py": {
+      "sha256": "3ab6853416b67b457c106f2479fb95d82897f9ac5c6a7e392408d10ccb5478bc",
+      "bytes": 9854
+    },
+    "agents/packet_agent.py": {
+      "sha256": "9c5ecf442de7650ea971cac6e1152efc2553018a29ddafaea2bcb94691f9cfe1",
+      "bytes": 17566
+    },
+    "agents/response_agent.py": {
+      "sha256": "55ccce111f87f03288d2302505f647fb8bc337c5d8e58859dbe7532b774cac56",
+      "bytes": 9458
+    },
+    "agents/state_schema.py": {
+      "sha256": "1b75052cf1356e7b10582e54e85dcf2cf834667f2832dfe80484163646878f39",
+      "bytes": 4042
+    },
+    "agents/test_pipeline.py": {
+      "sha256": "e97ba21038e3d2f80e0ba2e2bdcb19185207fc14e2ada45e4f949e578077ef9a",
+      "bytes": 1394
+    },
+    "agents/threat_agent.py": {
+      "sha256": "ec4bceccdc0cba518708e84ede68d16e2e3791918afd96c1ebfb9a6974dbd669",
+      "bytes": 9247
+    },
+    "agents/troubleshooting_agent.py": {
+      "sha256": "4373ad175d96473547eeb334857b00ce70343b3b5971f6e16acf88785d177136",
+      "bytes": 26154
+    },
+    "knowledge/mitre/lookup.py": {
+      "sha256": "d3d9b56276c8d86f049e888653dd68f3b22181155792ed2a5b6749cae1a171b3",
+      "bytes": 12799
+    },
+    "experiments/run_scenarios.py": {
+      "sha256": "0db149165b0c57101fe8f8519428e30110feb073821e51546c5c25ac82c120e9",
+      "bytes": 26211
+    },
+    "experiments/analyze.py": {
+      "sha256": "d77101c5b2e718d55b7b79521dbb52f731981b5b24298463ace62349f5785792",
+      "bytes": 43119
+    },
+    "experiments/regen_ml.py": {
+      "sha256": "5d16388746d27b02b018faf618160bf1ffa936725da602633b51d38e04ae44a2",
+      "bytes": 7835
+    },
+    "ml/models/rf_intrusion_detector.joblib": {
+      "sha256": "d1272598d37203339d7e41b8db2fa08a62bfa889c05a2b089e325c0f784b4546",
+      "bytes": 187990177
+    },
+    "ml/models/isolation_forest.joblib": {
+      "sha256": "73fa1a2ab3b5b5a37e24d87cbfa407cb87f906d306e2262604fe5a4e0abbef76",
+      "bytes": 1538281
+    },
+    "ml/models/isolation_forest_scaler.joblib": {
+      "sha256": "eb68b0a04d276b97223b164dbcfc533ad8305a5dfa3f8ed28d819d9971d0565b",
+      "bytes": 1351
+    },
+    "ml/models/label_encoder.joblib": {
+      "sha256": "c329c38baf9a8fe1641924e504e13233a2d7cdec0ff6e77036774e437c22b823",
+      "bytes": 699
+    },
+    "ml/models/protocol_encoder.joblib": {
+      "sha256": "fd6f740a9ff96c5ceb9433a250b38782874ce2d4e57fe3017bcaf2a4b65075b2",
+      "bytes": 486
+    },
+    "dataset/raw/acl_misconfig_A_evidence.txt": {
+      "sha256": "b64ce430d2e5141dd557095f8b082e01b7cddfea42b213a25d24b5afa1e8c8fb",
+      "bytes": 1652
+    },
+    "dataset/raw/acl_misconfig_A_metadata.json": {
+      "sha256": "d6b2842c85a517e97e9f34de6082fadc826050c7502cf41b17eadee92fea8ed4",
+      "bytes": 1046
+    },
+    "dataset/raw/acl_misconfig_B_evidence.txt": {
+      "sha256": "d198b46cb030012e2dd397aa741fc0286c9c7dbc7f795a45b1de5bc431acf576",
+      "bytes": 1652
+    },
+    "dataset/raw/acl_misconfig_B_metadata.json": {
+      "sha256": "6c67fb1525ed2391b7b7e0e7c744362d011a19705e6e9e25dfaf4c889e63af50",
+      "bytes": 1046
+    },
+    "dataset/raw/acl_misconfig_C_evidence.txt": {
+      "sha256": "f863f64867e45fdf8ceedabbd00dec196063fce3b71537383ced58bccac36bf1",
+      "bytes": 1652
+    },
+    "dataset/raw/acl_misconfig_C_metadata.json": {
+      "sha256": "6d5424a37dbc90047c36a4bcda472c5886d8b2323c2cd7e91e8aa5871d02975c",
+      "bytes": 1046
+    },
+    "dataset/raw/disabled_logging_misconfig_A_evidence.txt": {
+      "sha256": "b84780de4cc804df3b04b9ea32437bed7b3456369f70daaf6454281c6edca4fe",
+      "bytes": 1308
+    },
+    "dataset/raw/disabled_logging_misconfig_A_metadata.json": {
+      "sha256": "a8935c8758ded8acf726294f0b47b1f210d7eb7b4ac14e2da2dfab2152dd338a",
+      "bytes": 1096
+    },
+    "dataset/raw/disabled_logging_misconfig_B_evidence.txt": {
+      "sha256": "c8cd8e834215fb30ddfb76e187a91be487977f44e2f8be74144d83ce8907f32c",
+      "bytes": 1308
+    },
+    "dataset/raw/disabled_logging_misconfig_B_metadata.json": {
+      "sha256": "b4b3103fcb80035bcd04bbef8f173b157dc35e4f4a5e8457bd6afaafcd997946",
+      "bytes": 1096
+    },
+    "dataset/raw/disabled_logging_misconfig_C_evidence.txt": {
+      "sha256": "4c12b6a3d2d415e18dbafb0555f26ca999d0ff1edf2471c9cc32a3571bf162b2",
+      "bytes": 1308
+    },
+    "dataset/raw/disabled_logging_misconfig_C_metadata.json": {
+      "sha256": "920507fb2a0d0d812e43440774c10d6667a2025f422f5263fd704341a4753806",
+      "bytes": 1096
+    },
+    "dataset/raw/dns_misconfig_A_evidence.txt": {
+      "sha256": "d65383517bb4f0fa7e482bbb9db478faf06215e646878f71c87247166659f09f",
+      "bytes": 1406
+    },
+    "dataset/raw/dns_misconfig_A_metadata.json": {
+      "sha256": "84e51b39bcf4b16314c53f60d807b0e8e386af82aa6380d8de842f237ce8b8ed",
+      "bytes": 1070
+    },
+    "dataset/raw/dns_misconfig_B_evidence.txt": {
+      "sha256": "2162862f983f5da074579334216ab1b986df76cf1d027bdff59d2764ae1b8cf4",
+      "bytes": 1406
+    },
+    "dataset/raw/dns_misconfig_B_metadata.json": {
+      "sha256": "6771588ac464349536e0198dd601a0cde5570532b34656b9ca0a4e00be7f405e",
+      "bytes": 1070
+    },
+    "dataset/raw/dns_misconfig_C_evidence.txt": {
+      "sha256": "7a1646b4fca6519fd5a7b354f1e118e7833d35edce3f7d6fda48770afbf0c3c0",
+      "bytes": 1406
+    },
+    "dataset/raw/dns_misconfig_C_metadata.json": {
+      "sha256": "fe29a852efb74c2f8ceaec842fcc62e1fec416706928c3ba81e8962a2088ef9e",
+      "bytes": 1070
+    },
+    "dataset/raw/http_request_flood_a_evidence.txt": {
+      "sha256": "e5900844f247029497dec8363d7fc408a2cb07e5b2af2d0d15b8abd651094bec",
+      "bytes": 951
+    },
+    "dataset/raw/http_request_flood_a_firewall_rules.txt": {
+      "sha256": "a4fd5f5dc09d9f72043a4a5cc43150bf5aa20e71984be4f23591a529eabade1f",
+      "bytes": 313
+    },
+    "dataset/raw/http_request_flood_a_metadata.json": {
+      "sha256": "cdf762d1a67afd9827b5086c117770601196125bcf8cb1cbc38159aae37f6c90",
+      "bytes": 1362
+    },
+    "dataset/raw/icmp_host_sweep_a_evidence.txt": {
+      "sha256": "c06fea3af24cfb95fed4adbb686bbbf60798d733c1066713a778b8e5902f3724",
+      "bytes": 951
+    },
+    "dataset/raw/icmp_host_sweep_a_firewall_rules.txt": {
+      "sha256": "79af23296ebbcfe21fdeed2d018212426231c9abee41286f3d666c0ef5e1fbde",
+      "bytes": 1573
+    },
+    "dataset/raw/icmp_host_sweep_a_metadata.json": {
+      "sha256": "a30c20b2adfac2867b8f5e4d407fc7783e92b7320ff3f077836d9019a83d7c9b",
+      "bytes": 1254
+    },
+    "dataset/raw/icmp_host_sweep_b_evidence.txt": {
+      "sha256": "e5900844f247029497dec8363d7fc408a2cb07e5b2af2d0d15b8abd651094bec",
+      "bytes": 951
+    },
+    "dataset/raw/icmp_host_sweep_b_firewall_rules.txt": {
+      "sha256": "79af23296ebbcfe21fdeed2d018212426231c9abee41286f3d666c0ef5e1fbde",
+      "bytes": 1573
+    },
+    "dataset/raw/icmp_host_sweep_b_metadata.json": {
+      "sha256": "d25e4b1d873966c792aaaf439cb854a9c9cc538fd230d5b18b70b5d4ed2052fd",
+      "bytes": 1253
+    },
+    "dataset/raw/ssh_bruteforce_sim_a_evidence.txt": {
+      "sha256": "c06fea3af24cfb95fed4adbb686bbbf60798d733c1066713a778b8e5902f3724",
+      "bytes": 951
+    },
+    "dataset/raw/ssh_bruteforce_sim_a_firewall_rules.txt": {
+      "sha256": "e0e6ae7e220f682b9c64d5cb5025f0905dccd55df56be68a82a2c0f131513063",
+      "bytes": 313
+    },
+    "dataset/raw/ssh_bruteforce_sim_a_metadata.json": {
+      "sha256": "bb297a7b659210092affc016ea2293cbc597adf7c2b62fd17f0e43f9a4cd0dcd",
+      "bytes": 1218
+    },
+    "dataset/raw/ssh_bruteforce_sim_b_evidence.txt": {
+      "sha256": "db3a86557d5e2429e95b7e4468e83deab6422b6ce588639386a1db750d635842",
+      "bytes": 951
+    },
+    "dataset/raw/ssh_bruteforce_sim_b_firewall_rules.txt": {
+      "sha256": "67b670cd24ed1a9ad8057d9123a5675ec6874817c4e27df8893035d0ed321511",
+      "bytes": 313
+    },
+    "dataset/raw/ssh_bruteforce_sim_b_metadata.json": {
+      "sha256": "409c6e72f7c3e9408bde212a4e04f21aee0bd0f2b49c0bd2a4fce9dd675a8a11",
+      "bytes": 1219
+    },
+    "dataset/raw/tcp_port_scan_a_evidence.txt": {
+      "sha256": "c06fea3af24cfb95fed4adbb686bbbf60798d733c1066713a778b8e5902f3724",
+      "bytes": 951
+    },
+    "dataset/raw/tcp_port_scan_a_firewall_rules.txt": {
+      "sha256": "e0e6ae7e220f682b9c64d5cb5025f0905dccd55df56be68a82a2c0f131513063",
+      "bytes": 313
+    },
+    "dataset/raw/tcp_port_scan_a_metadata.json": {
+      "sha256": "d202fcd6618fb6a202cb1cf4495650b6c5ab8d74663bd41f0868112b02060f6b",
+      "bytes": 1135
+    },
+    "dataset/raw/tcp_port_scan_b_evidence.txt": {
+      "sha256": "e5900844f247029497dec8363d7fc408a2cb07e5b2af2d0d15b8abd651094bec",
+      "bytes": 951
+    },
+    "dataset/raw/tcp_port_scan_b_firewall_rules.txt": {
+      "sha256": "a4fd5f5dc09d9f72043a4a5cc43150bf5aa20e71984be4f23591a529eabade1f",
+      "bytes": 313
+    },
+    "dataset/raw/tcp_port_scan_b_metadata.json": {
+      "sha256": "8502d9dd3ab4fe3e49651983126684d3767d3f8cbd2d86a32eb95f2531c8da3a",
+      "bytes": 1138
+    },
+    "dataset/raw/tcp_slow_scan_a_evidence.txt": {
+      "sha256": "e5900844f247029497dec8363d7fc408a2cb07e5b2af2d0d15b8abd651094bec",
+      "bytes": 951
+    },
+    "dataset/raw/tcp_slow_scan_a_firewall_rules.txt": {
+      "sha256": "a4fd5f5dc09d9f72043a4a5cc43150bf5aa20e71984be4f23591a529eabade1f",
+      "bytes": 313
+    },
+    "dataset/raw/tcp_slow_scan_a_metadata.json": {
+      "sha256": "eca7204ec8a0b7bcb86ad85049e0529521444bd676d8393cf5b27922ffe61a71",
+      "bytes": 1161
+    },
+    "dataset/raw/tcp_slow_syn_a_evidence.txt": {
+      "sha256": "c06fea3af24cfb95fed4adbb686bbbf60798d733c1066713a778b8e5902f3724",
+      "bytes": 951
+    },
+    "dataset/raw/tcp_slow_syn_a_firewall_rules.txt": {
+      "sha256": "e0e6ae7e220f682b9c64d5cb5025f0905dccd55df56be68a82a2c0f131513063",
+      "bytes": 313
+    },
+    "dataset/raw/tcp_slow_syn_a_metadata.json": {
+      "sha256": "f49eeb7539c4d7bd2a89bdade4f2c2d203de905de9a47202dd675131addec95d",
+      "bytes": 1294
+    },
+    "dataset/raw/tcp_slow_syn_b_evidence.txt": {
+      "sha256": "e5900844f247029497dec8363d7fc408a2cb07e5b2af2d0d15b8abd651094bec",
+      "bytes": 951
+    },
+    "dataset/raw/tcp_slow_syn_b_firewall_rules.txt": {
+      "sha256": "a4fd5f5dc09d9f72043a4a5cc43150bf5aa20e71984be4f23591a529eabade1f",
+      "bytes": 313
+    },
+    "dataset/raw/tcp_slow_syn_b_metadata.json": {
+      "sha256": "99ee41ebe926e1155ab0c35f6c641a43872f628660537eff8c8adef9722282a4",
+      "bytes": 1294
+    },
+    "dataset/raw/tcp_syn_burst_a_evidence.txt": {
+      "sha256": "c06fea3af24cfb95fed4adbb686bbbf60798d733c1066713a778b8e5902f3724",
+      "bytes": 951
+    },
+    "dataset/raw/tcp_syn_burst_a_firewall_rules.txt": {
+      "sha256": "e0e6ae7e220f682b9c64d5cb5025f0905dccd55df56be68a82a2c0f131513063",
+      "bytes": 313
+    },
+    "dataset/raw/tcp_syn_burst_a_metadata.json": {
+      "sha256": "c8bd27ca2f920ee2246cefa46f6dc89ddce78df75bee2e553c14c8bbc72a4193",
+      "bytes": 1301
+    },
+    "dataset/raw/tcp_syn_burst_b_evidence.txt": {
+      "sha256": "db3a86557d5e2429e95b7e4468e83deab6422b6ce588639386a1db750d635842",
+      "bytes": 951
+    },
+    "dataset/raw/tcp_syn_burst_b_firewall_rules.txt": {
+      "sha256": "67b670cd24ed1a9ad8057d9123a5675ec6874817c4e27df8893035d0ed321511",
+      "bytes": 313
+    },
+    "dataset/raw/tcp_syn_burst_b_metadata.json": {
+      "sha256": "92904fb67f3b0e45f1a1e7ba6c2222ca7ebe7eb8953f79ce6857d442108377f6",
+      "bytes": 1297
+    },
+    "dataset/raw/udp_port_scan_a_evidence.txt": {
+      "sha256": "c06fea3af24cfb95fed4adbb686bbbf60798d733c1066713a778b8e5902f3724",
+      "bytes": 951
+    },
+    "dataset/raw/udp_port_scan_a_firewall_rules.txt": {
+      "sha256": "e0e6ae7e220f682b9c64d5cb5025f0905dccd55df56be68a82a2c0f131513063",
+      "bytes": 313
+    },
+    "dataset/raw/udp_port_scan_a_metadata.json": {
+      "sha256": "05ece5233523af347a23fa61fd6e9800eca6798cff3f6a8fe0321964130f64b6",
+      "bytes": 1132
+    },
+    "dataset/raw/udp_port_scan_b_evidence.txt": {
+      "sha256": "db3a86557d5e2429e95b7e4468e83deab6422b6ce588639386a1db750d635842",
+      "bytes": 951
+    },
+    "dataset/raw/udp_port_scan_b_firewall_rules.txt": {
+      "sha256": "67b670cd24ed1a9ad8057d9123a5675ec6874817c4e27df8893035d0ed321511",
+      "bytes": 313
+    },
+    "dataset/raw/udp_port_scan_b_metadata.json": {
+      "sha256": "d88ef44157c87e6bfc1568a1df3436a4b78fe2091230aa4bf91842623cb0d66b",
+      "bytes": 1135
+    }
+  }
+}

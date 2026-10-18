@@ -31,7 +31,9 @@ if str(PACKET_PROCESSING_DIR) not in sys.path:
     sys.path.insert(0, str(PACKET_PROCESSING_DIR))
 
 from flow_extractor import extract_flows
-from feature_extractor import calculate_features
+from feature_extractor import calculate_features, apply_feature_version
+
+from agents.config import get_feature_version, get_reasoning_version
 
 FEATURE_COLUMNS = [
     "packet_count", "byte_count", "duration_s", "packets_per_sec",
@@ -251,6 +253,31 @@ def _compute_cross_flow_pattern(flows: dict) -> dict:
         }
 
     result.update(_discriminating_features(real_flows, subject_src, target_ip, target_port))
+
+    # v2 evidence: the existing flow_count / time_span_s describe the DETECTED
+    # pattern group only, so they read 0 when pattern == "none_detected" even
+    # though the capture holds real flows. Add true capture-wide totals in a
+    # separate field, independent of the pattern label, so a reasoning agent is
+    # not misled into thinking there were zero flows. This does NOT change the
+    # pattern label, how patterns are detected, or any ML feature value -- it is
+    # additive evidence only, and absent under v1.
+    if get_reasoning_version() == "v2":
+        subj_flows = ([f for f in real_flows if f.get("src_ip") == subject_src]
+                      if subject_src else [])
+        if subj_flows:
+            span = (max(f["last_timestamp"] for f in subj_flows)
+                    - min(f["first_timestamp"] for f in subj_flows))
+        else:
+            span = 0.0
+        result["capture_wide_totals"] = {
+            "subject_source": subject_src,
+            "subject_flow_count": len(subj_flows),
+            "distinct_dst_ports": result.get("distinct_dst_ports", 0),
+            "distinct_dst_hosts": result.get("distinct_dst_hosts", 0),
+            "time_span_s": round(max(span, 0.0), 4),
+            "total_flows_in_capture": len(real_flows),
+            "pattern": result.get("pattern"),  # label kept as a separate field
+        }
     return result
 
 
@@ -306,10 +333,31 @@ def run_packet_agent(state: NetDefendState) -> dict:
         print("[Packet Analysis Agent] no flows extracted, returning empty packet_features")
         return {"packet_features": {}, "cross_flow_pattern": cross_flow_pattern}
 
+    # v2 evidence: calculate_features() drops the 5-tuple, so the selected
+    # flow's src/dst were reported as null. Re-attach src_ip/dst_ip/dst_port as
+    # EXTRA context columns (the ML agent only reads FEATURE_COLUMNS+protocol,
+    # so these do not touch any feature value), aligned positionally -- the
+    # feature rows are produced in flows.values() order. Selection below reads
+    # only syn/packet/protocol, so the chosen flow is unchanged. v1 omits this.
+    if get_reasoning_version() == "v2":
+        raw_list = list(flows.values())
+        if len(raw_list) == len(flows_df):
+            for col in ("src_ip", "dst_ip", "src_port", "dst_port"):
+                flows_df[col] = [f.get(col) for f in raw_list]
+
     selected_flow, selection_reason = _select_representative_flow(flows_df)
 
     packet_features = {col: selected_flow.get(col, 0) for col in FEATURE_COLUMNS}
     packet_features["protocol"] = selected_flow.get("protocol", 0)
+
+    # Apply the active feature version to the SELECTED representative flow only.
+    # Flow selection above reads the un-transformed flows_df, so the chosen flow
+    # is identical across versions; v2 only rescales this flow's IAT to
+    # microseconds and recomputes syn_count as pure-SYN (see
+    # feature_extractor.apply_feature_version). v1 is a no-op.
+    feature_version = get_feature_version()
+    packet_features = apply_feature_version(packet_features, feature_version)
+    packet_features["feature_version"] = feature_version
 
     # Context fields for other agents -- harmless extras, Intrusion
     # Detection Agent only reads FEATURE_COLUMNS + protocol.

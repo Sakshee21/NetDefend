@@ -223,7 +223,38 @@ def _match_packet_features(packet_features: dict) -> Optional[TTPMatch]:
 # Public entry point
 # ---------------------------------------------------------------------------
 
-def lookup_ttp(ml_prediction: Optional[dict], packet_features: Optional[dict]) -> Optional[TTPMatch]:
+def _match_cross_flow(cross_flow: dict) -> Optional[TTPMatch]:
+    """Cross-flow heuristic for scans whose signature spans many flows and so
+    cannot be seen in a single representative flow.
+
+    UDP port scan: many distinct destination ports on one host with no TCP
+    flags -> Network Service Discovery (T1046). "Many" mirrors the existing
+    single-flow scan heuristic (>=10), so no new threshold is tuned here; it
+    is the general ATT&CK scan pattern, not a per-scenario adjustment.
+
+    Only consulted on the v2-reasoning path (the caller passes cross_flow only
+    then), so v1 mapping is byte-for-byte unchanged.
+    """
+    if not cross_flow:
+        return None
+    distinct_ports = cross_flow.get("distinct_dst_ports", 0) or 0
+    distinct_hosts = cross_flow.get("distinct_dst_hosts", 0) or 0
+    total_syn = cross_flow.get("total_syn_count", 0) or 0
+    total_synack = cross_flow.get("total_synack_count", 0) or 0
+    if distinct_ports >= 10 and distinct_hosts <= 1 and total_syn == 0 and total_synack == 0:
+        return {
+            "ttp_id": "T1046", "technique_name": "Network Service Discovery",
+            "tactic": "Discovery", "mapping_method": "cross_flow_heuristic",
+            "confidence": 0.6,
+        }
+    return None
+
+
+def lookup_ttp(
+    ml_prediction: Optional[dict],
+    packet_features: Optional[dict],
+    cross_flow: Optional[dict] = None,
+) -> Optional[TTPMatch]:
     """Try to resolve a TTP without calling an LLM.
 
     Args:
@@ -242,4 +273,10 @@ def lookup_ttp(ml_prediction: Optional[dict], packet_features: Optional[dict]) -
         if class_match:
             return class_match
 
-    return _match_packet_features(packet_features or {})
+    feature_match = _match_packet_features(packet_features or {})
+    if feature_match:
+        return feature_match
+
+    # Cross-flow heuristic (e.g. UDP port scan) only when the caller supplies
+    # cross-flow evidence -- the v2-reasoning path. None under v1.
+    return _match_cross_flow(cross_flow or {})

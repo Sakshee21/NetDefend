@@ -1,0 +1,139 @@
+{
+  "scenario_id": "tcp_slow_scan_a",
+  "run_idx": 0,
+  "tag": "d1",
+  "packet_features": {
+    "packet_count": 1.0,
+    "byte_count": 54.0,
+    "duration_s": 0.0,
+    "packets_per_sec": 0.0,
+    "bytes_per_sec": 0.0,
+    "mean_inter_arrival": 0.0,
+    "std_inter_arrival": 0.0,
+    "syn_count": 1.0,
+    "synack_count": 0.0,
+    "rst_count": 0.0,
+    "ssh_auth_attempts": 0.0,
+    "protocol": 6.0,
+    "flow_count": 31,
+    "top_talker_ip": null,
+    "top_dst_port": null
+  },
+  "cross_flow_pattern": {
+    "destination": {
+      "ip": null,
+      "port": null
+    },
+    "flow_count": 0,
+    "total_syn_count": 0,
+    "total_synack_count": 0,
+    "time_span_s": 0.0,
+    "pattern": "none_detected",
+    "subject_source": "10.0.0.3",
+    "distinct_dst_ports": 15,
+    "distinct_dst_hosts": 1,
+    "prior_successful_flows": 0,
+    "retry_interval_cv": null
+  },
+  "ml_prediction": {
+    "attack_probability": 0.21999999999999997,
+    "predicted_class": "Benign",
+    "anomaly_score": 0.13616342535605885
+  },
+  "attack_hypothesis": {
+    "ttp_id": "T1046",
+    "ttp_confidence": 0.78,
+    "threat_hypothesis": {
+      "summary": "A low\u2011volume network service scan appears to be occurring from source 10.0.0.3, probing multiple destination ports on a single host.",
+      "evidence": [
+        "The cross\u2011flow pattern reports the subject source as \"10.0.0.3\"",
+        "The aggregate data shows 15 distinct destination ports were contacted",
+        "The aggregate data shows only 1 distinct destination host was targeted",
+        "The aggregate flow count across the capture is 31",
+        "The representative flow has a SYN count of 1.0",
+        "The representative flow packet count is 1.0 and byte count is 54.0",
+        "The ML prediction assigned the flow to the \"Benign\" class with an attack probability of 0.22",
+        "The anomaly score for the flow is 0.13616342535605885"
+      ]
+    },
+    "llm_call_failed": false
+  },
+  "misconfig_hypothesis": {
+    "is_misconfiguration": 0.7,
+    "hypothesis": {
+      "summary": "Only a single SYN packet was observed from 10.0.0.3 to an unspecified destination, with no matching firewall logs or other configuration evidence indicating why the traffic would be blocked or misrouted.",
+      "taxonomy_category": "NONE",
+      "evidence": [
+        "network_observation shows 1 packet, 54 bytes, 1 SYN, 0 duration",
+        "cross_flow_evidence indicates 15 distinct destination ports but 0 flows with successful handshakes",
+        "configuration_evidence is empty",
+        "host firewalls on 10.0.0.3 and 10.0.0.4 have default ACCEPT policies and no rules",
+        "no kernel netfilter logs for SRC=10.0.0.3",
+        "ml_evidence labels traffic as benign with low anomaly score"
+      ]
+    }
+  },
+  "latency_s": {
+    "packet": 0.03,
+    "intrusion": 0.124,
+    "threat": 2.713,
+    "troubleshooting": 7.679,
+    "arbiter": 51.101
+  },
+  "telemetry": {
+    "threat": {
+      "calls": 2,
+      "prompt_tokens": 1012,
+      "completion_tokens": 639,
+      "had_nonok": false,
+      "json_fail": false,
+      "repaired": false,
+      "statuses": [
+        "ok",
+        "ok"
+      ]
+    },
+    "troubleshooting": {
+      "calls": 1,
+      "prompt_tokens": 1715,
+      "completion_tokens": 785,
+      "had_nonok": false,
+      "json_fail": false,
+      "repaired": false,
+      "statuses": [
+        "ok"
+      ]
+    },
+    "arbiter": {
+      "calls": 4,
+      "prompt_tokens": 3503,
+      "completion_tokens": 4174,
+      "had_nonok": false,
+      "json_fail": false,
+      "repaired": false,
+      "statuses": [
+        "ok",
+        "ok",
+        "ok",
+        "ok"
+      ]
+    }
+  },
+  "arbiter_verdict": {
+    "classification": "ATTACK",
+    "confidence": 0.75,
+    "reasoning": "The ATTACK rebuttal directly cites the 31 aggregate flows, 15 distinct destination ports, the single\u2011packet per flow, the anomaly score, and ML probability to explain how a low\u2011volume service scan can produce the observed pattern. It explicitly reconciles the lack of handshakes with the scan hypothesis. The MISCONFIGURATION response, while plausible, offers a generic \u201ctraffic never reached the firewall\u201d explanation without tying it to specific evidence beyond the absence of firewall logs, and it does not directly address the 31\u2011flow count. Therefore the ATTACK hypothesis better survived the challenge."
+  },
+  "refutation_exchange": [
+    {
+      "challenged_agent": "threat_hunting",
+      "challenge": "Given misconfiguration evidence that only one SYN packet of 54 bytes was seen from 10.0.0.3 and no successful handshakes, how does the ATTACK hypothesis explain the reported 31 aggregate flows and 15 distinct destination ports in the same capture?",
+      "response": "The evidence shows that the source 10.0.0.3 produced 31 distinct flow records in the capture, each of which has a SYN count of 1.0 (the representative flow lists 1 SYN, 1 packet, 54 bytes). The aggregate data also reports 15 different destination ports contacted. In other words, the capture contains 31 separate SYN attempts from 10.0.0.3 to 15 unique destination ports on a single host. A low\u2011volume service scan can easily produce this pattern: the scanner sends a single SYN to each port, receives no response (hence no successful handshakes), and may retransmit some probes, yielding the 31 flow count. The fact that only one packet is seen per flow does not contradict the scan hypothesis; it reflects the very low volume and the fact that the capture only recorded the initial SYN for each probe. The anomaly score (0.136) and ML benign probability (0.22) indicate the traffic is atypical for normal traffic but still within the bounds of a low\u2011volume scan. Therefore the reported 31 flows and 15 ports are fully consistent with the attack hypothesis of a low\u2011volume network service scan from 10.0.0.3."
+    },
+    {
+      "challenged_agent": "troubleshooting",
+      "challenge": "Considering the ATTACK hypothesis lists 31 aggregate flows with 15 distinct destination ports from 10.0.0.3, yet the misconfiguration evidence notes that host firewalls on 10.0.0.3 and 10.0.0.4 have default ACCEPT policies, no rules, and no kernel netfilter logs, how can the MISCONFIGURATION hypothesis account for the apparent traffic that should have been permitted by the firewall yet remains unseen?",
+      "response": "The MISCONFIGURATION hypothesis does not posit that the host firewall blocked the traffic; it only states that only a single SYN packet was observed. The evidence shows that 15 distinct destination ports were targeted but 0 flows with successful handshakes occurred, indicating that the attempts were not completed. The host firewalls on 10.0.0.3 and 10.0.0.4 have default ACCEPT policies and no rules, and no kernel netfilter logs exist for SRC=10.0.0.3, meaning the host firewall did not see or log any of the packets. This suggests the packets never reached the host firewall. The most plausible explanation, supported by the evidence, is a misconfiguration in routing, interface, or capture point that dropped or rerouted the traffic before it could be processed or logged by the host firewall. The single observed SYN is therefore the only packet that made it to the host, while the remaining 30 aggregate flows were lost due to that upstream misconfiguration. Thus, the MISCONFIGURATION hypothesis fully accounts for the apparent traffic that should have been permitted by the firewall yet remains unseen, by attributing it to a misconfiguration outside the firewall rather than to the firewall itself."
+    }
+  ]
+}

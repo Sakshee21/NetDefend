@@ -291,3 +291,18 @@
     padding: 0 16px;
   }
 }
+
+/* Header pipeline-version badge (from the response versions field). */
+.version-badge-header {
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+}
+.version-badge-header.is-warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-color: var(--risk-high);
+  color: var(--risk-high);
+}

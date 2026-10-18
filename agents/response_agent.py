@@ -169,11 +169,18 @@ def run_response_agent(state: NetDefendState) -> dict:
 
     # The affected host is the real target of the traffic. cross_flow_pattern
     # carries the actual destination IP/port (see agents/packet_agent.py);
-    # fall back to the selected flow's talker IP, then to "unknown".
+    # fall back to the selected flow's talker IP, then to the subject source
+    # the cross-flow discriminators describe (the host at the centre of the
+    # incident, e.g. the scanner/client), and only then to "unknown".
     cross_flow = state.get("cross_flow_pattern") or {}
     destination = cross_flow.get("destination") or {}
     features = state.get("packet_features") or {}
-    affected_host = destination.get("ip") or features.get("top_talker_ip") or "unknown"
+    affected_host = (
+        destination.get("ip")
+        or features.get("top_talker_ip")
+        or cross_flow.get("subject_source")
+        or "unknown"
+    )
 
     risk_level = _derive_risk_level(classification, confidence, ttp_id)
     recommended_action = _generate_recommended_action(

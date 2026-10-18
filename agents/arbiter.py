@@ -40,6 +40,7 @@ import os
 
 from agents.llm_client import call_llm, parse_json_response
 from agents.state_schema import NetDefendState
+from agents.config import get_reasoning_version
 
 # Same Groq model the Network Troubleshooting Agent uses -- MODEL_NAME_LIGHT
 # (gpt-oss-20b), chosen there for its JSON-mode reliability over the 120b
@@ -117,6 +118,51 @@ Respond with JSON only, no prose, no markdown fences, exactly:
 }"""
 
 
+# v2 reasoning: adjudicate on EVIDENCE SUPPORT, not on who conceded. A
+# concession is not an automatic loss, and when both hypotheses are weak the
+# verdict is UNCERTAIN. Used only when reasoning v2 is active.
+_ADJUDICATOR_SYSTEM_V2 = """You are the Dialectical Arbiter delivering a final verdict for a network
+incident. You are given two competing hypotheses (ATTACK vs
+MISCONFIGURATION), the refutation challenge put to each, and each
+hypothesis's response to its challenge.
+
+Judge by EVIDENCE SUPPORT, not by debating style. For each hypothesis ask:
+is its claim backed by concrete evidence cited from this incident (specific
+counts, ports, addresses, log lines, rules, ML scores), and does its response
+to the challenge rest on that evidence?
+
+Important rules:
+- A hypothesis that CONCEDES a challenge does NOT automatically lose. An
+  honest concession on one point can still sit alongside strong evidence for
+  the overall claim; weigh the whole evidential picture, not the concession
+  alone.
+- Do NOT reward a confident or specific-sounding rebuttal that is not backed
+  by cited evidence over an honest, evidence-grounded concession.
+- If BOTH hypotheses are weakly supported -- little concrete evidence on
+  either side, or neither response is grounded in real evidence -- return
+  UNCERTAIN. Prefer UNCERTAIN over a forced guess.
+- ML classifier scores are weak, uncalibrated evidence on their own and must
+  not outweigh concrete network or configuration evidence.
+
+Choose exactly one classification:
+- "ATTACK": the attack hypothesis is the better evidence-supported account.
+- "MISCONFIGURATION": the misconfiguration hypothesis is the better
+  evidence-supported account.
+- "UNCERTAIN": neither hypothesis is clearly better supported, or both are weak.
+
+Respond with JSON only, no prose, no markdown fences, exactly:
+{
+  "classification": "ATTACK" | "MISCONFIGURATION" | "UNCERTAIN",
+  "confidence": a number between 0.0 and 1.0 for how sure you are of this verdict,
+  "reasoning": "which hypothesis was better supported by evidence and why, referencing the responses"
+}"""
+
+
+def _adjudicator_system() -> str:
+    """Select the adjudication rubric for the active reasoning version."""
+    return _ADJUDICATOR_SYSTEM_V2 if get_reasoning_version() == "v2" else _ADJUDICATOR_SYSTEM
+
+
 # ======================================================
 # HYPOTHESIS PACKAGING + FAILURE DETECTION
 # ======================================================
@@ -169,6 +215,57 @@ def _conf(value) -> float:
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _misconfig_is_null(state: NetDefendState) -> bool:
+    """True when the misconfiguration hypothesis is the v2 null hypothesis --
+    it cited no concrete configuration artifact present in the evidence (see
+    agents/troubleshooting_agent._apply_v2_reasoning). Such a hypothesis must
+    not win adjudication."""
+    mh = state.get("misconfig_hypothesis") or {}
+    return bool(mh.get("null_hypothesis")) or \
+        mh.get("taxonomy_category") == "NO_MISCONFIG_EVIDENCE"
+
+
+def _resolve_null_misconfig(attack: dict, attack_broken: bool) -> dict:
+    """v2 path: the misconfiguration hypothesis is null and cannot win, so the
+    verdict is ATTACK or UNCERTAIN. ATTACK only when the attack hypothesis is
+    itself supported by concrete evidence (it has cited evidence and did not
+    fail upstream); otherwise UNCERTAIN. No sham exchange is staged."""
+    has_attack_evidence = bool(attack.get("evidence")) and not attack_broken
+    # Both branches share the same bundle-based reasoning text; only the
+    # classification differs (ATTACK when the attack side has cited evidence,
+    # otherwise UNCERTAIN).
+    reasoning = (
+        "The evidence bundle contains no configuration artifact, so the "
+        "misconfiguration hypothesis cannot be supported."
+    )
+    if has_attack_evidence:
+        classification = "ATTACK"
+        confidence = round(_conf(attack.get("confidence")), 2)
+    else:
+        classification, confidence = "UNCERTAIN", 0.0
+
+    verdict = {
+        "classification": classification,
+        "confidence": confidence,
+        "reasoning": reasoning,
+    }
+    if classification == "UNCERTAIN":
+        verdict["escalation"] = _UNCERTAIN_ESCALATION
+
+    refutation_exchange = [
+        {"challenged_agent": "threat_hunting",
+         "challenge": "(misconfiguration hypothesis is null; no exchange staged)",
+         "response": "(not challenged)"},
+        {"challenged_agent": "troubleshooting",
+         "challenge": "Null misconfiguration hypothesis: no concrete "
+                      "configuration artifact was cited from the evidence.",
+         "response": "(no response — null hypothesis cannot be defended)"},
+    ]
+    print(f"[Dialectical Arbiter] verdict (null-misconfiguration path): "
+          f"{classification} ({confidence:.2f})")
+    return {"refutation_exchange": refutation_exchange, "arbiter_verdict": verdict}
 
 
 # ======================================================
@@ -270,8 +367,10 @@ def _run_adversarial_exchange(attack: dict, misconfig: dict, cross_flow: dict) -
     ]
 
     # 4. Adjudicate on the exchange -- explicitly NOT on the prior confidences.
+    #    v2 reasoning swaps in the evidence-support rubric; the protocol (the
+    #    four calls and what each sees) is unchanged.
     adjudication = _call_json(
-        _ADJUDICATOR_SYSTEM,
+        _adjudicator_system(),
         "ATTACK hypothesis:\n" + json.dumps(attack, indent=2) +
         "\n\nMISCONFIGURATION hypothesis:\n" + json.dumps(misconfig, indent=2) +
         "\n\nChallenge put to the ATTACK hypothesis:\n" + challenge_to_attack +
@@ -458,6 +557,31 @@ def _rule_based_fallback(attack: dict, misconfig: dict) -> dict:
         "refutation_exchange": refutation_exchange,
         "arbiter_verdict": verdict,
     }
+_NO_CONFIG_EVIDENCE_NOTE = "no configuration evidence supplied"
+_NO_CONFIG_EVIDENCE_CAP = 0.6
+
+
+def _apply_no_config_evidence(out: dict, state: NetDefendState) -> dict:
+    """v2: when no firewall/evidence file was supplied for the incident, the
+    verdict carries an explicit note and its confidence is capped at 0.6 --
+    the system cannot be confident about a configuration explanation it never
+    saw evidence for. The null gate already prevents a MISCONFIGURATION verdict
+    here; this only annotates and bounds the confidence. When evidence WAS
+    supplied (even a default-only ruleset), nothing changes. v1 is untouched."""
+    if get_reasoning_version() != "v2":
+        return out
+    if state.get("config_evidence_supplied", True):
+        return out
+    verdict = out.get("arbiter_verdict") or {}
+    conf = _conf(verdict.get("confidence"))
+    verdict["confidence"] = round(min(conf, _NO_CONFIG_EVIDENCE_CAP), 2)
+    verdict["note"] = _NO_CONFIG_EVIDENCE_NOTE
+    out["arbiter_verdict"] = verdict
+    print(f"[Dialectical Arbiter] {_NO_CONFIG_EVIDENCE_NOTE}; confidence "
+          f"capped at {verdict['confidence']:.2f}")
+    return out
+
+
 # ======================================================
 # ENTRY POINT
 # ======================================================
@@ -482,17 +606,26 @@ def run_arbiter(state: NetDefendState) -> dict:
     attack_broken = _attack_failed(state)
     misconfig_broken = _misconfig_failed(state)
 
+    # v2 reasoning: a null misconfiguration hypothesis cannot win. Resolve to
+    # ATTACK or UNCERTAIN based on the attack hypothesis's evidence support,
+    # without staging an exchange the null side cannot take part in.
+    if get_reasoning_version() == "v2" and _misconfig_is_null(state) \
+            and not attack_broken:
+        return _apply_no_config_evidence(
+            _resolve_null_misconfig(attack, attack_broken), state)
+
     # A hypothesis that failed upstream cannot defend itself -- resolve
     # deterministically rather than staging a sham exchange.
     if attack_broken or misconfig_broken:
-        return _resolve_with_broken_hypothesis(
-            attack, misconfig, attack_broken, misconfig_broken
-        )
+        return _apply_no_config_evidence(_resolve_with_broken_hypothesis(
+            attack, misconfig, attack_broken, misconfig_broken), state)
 
     # Both hypotheses are real: run the genuine adversarial exchange, with a
     # transparent rule-based fallback if the LLM machinery cannot complete.
     try:
-        return _run_adversarial_exchange(attack, misconfig, cross_flow)
+        return _apply_no_config_evidence(
+            _run_adversarial_exchange(attack, misconfig, cross_flow), state)
     except Exception as exc:  # noqa: BLE001 -- degrade gracefully, don't crash the pipeline
         print(f"[Dialectical Arbiter] adversarial exchange failed: {exc}")
-        return _rule_based_fallback(attack, misconfig)
+        return _apply_no_config_evidence(
+            _rule_based_fallback(attack, misconfig), state)

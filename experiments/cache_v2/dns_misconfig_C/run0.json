@@ -1,0 +1,29 @@
+{
+  "scenario_id": "dns_misconfig_C",
+  "run_idx": 0,
+  "feature_version": "v2",
+  "ml_only": true,
+  "packet_features": {
+    "packet_count": 1.0,
+    "byte_count": 94.0,
+    "duration_s": 0.0,
+    "packets_per_sec": 0.0,
+    "bytes_per_sec": 0.0,
+    "mean_inter_arrival": 0.0,
+    "std_inter_arrival": 0.0,
+    "syn_count": 0.0,
+    "synack_count": 0.0,
+    "rst_count": 0.0,
+    "ssh_auth_attempts": 0,
+    "protocol": 17.0,
+    "feature_version": "v2",
+    "flow_count": 42,
+    "top_talker_ip": null,
+    "top_dst_port": null
+  },
+  "ml_prediction": {
+    "attack_probability": 0.16666666666666663,
+    "predicted_class": "Benign",
+    "anomaly_score": 0.20362427390026622
+  }
+}

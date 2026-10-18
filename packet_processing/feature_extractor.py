@@ -1,6 +1,40 @@
 import numpy as np
 
 
+def apply_feature_version(features, version):
+    """Apply versioned corrections to ONE flow's feature dict.
+
+    v1 -- returns the features unchanged. This is the legacy behaviour that
+    produced the committed cache/results, so default runs are unaffected.
+
+    v2 -- aligns the inference features to the CICIDS2017 training units
+    identified in the Intrusion Detection diagnosis:
+      * mean_inter_arrival / std_inter_arrival: computed in SECONDS here but
+        trained in MICROSECONDS, so they are multiplied by 1e6 to match the
+        training scaler means (~1e6).
+      * syn_count: trained as "SYN flag set AND ACK not set" (pure SYN), but
+        the legacy flow counter also counted SYN-ACK packets; recompute it as
+        (raw SYN count - SYN-ACK count), clamped at zero.
+      * ssh_auth_attempts: left at a constant 0 -- a documented dead feature
+        (never populated at training or inference).
+
+    Returns a shallow copy with only the four model-fed fields adjusted; every
+    other key (protocol, context fields) is preserved. Applied only to the
+    already-selected representative flow, so upstream flow selection -- which
+    reads the un-transformed flows -- is unaffected.
+    """
+    if version != "v2":
+        return features
+    f = dict(features)
+    f["mean_inter_arrival"] = float(f.get("mean_inter_arrival", 0) or 0) * 1e6
+    f["std_inter_arrival"] = float(f.get("std_inter_arrival", 0) or 0) * 1e6
+    raw_syn = float(f.get("syn_count", 0) or 0)
+    synack = float(f.get("synack_count", 0) or 0)
+    f["syn_count"] = max(raw_syn - synack, 0.0)
+    f["ssh_auth_attempts"] = 0
+    return f
+
+
 def calculate_features(flows):
 
     feature_list = []

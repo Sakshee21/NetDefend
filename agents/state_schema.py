@@ -55,12 +55,26 @@ class NetDefendState(TypedDict):
     llm_call_failed: Optional[bool]
     # {"summary": str, "evidence": list[str]}
     threat_hypothesis: Optional[dict]
+    # v2 reasoning only -- grounding-validator result for the attack side:
+    # {"evidence_dropped": int, "flagged": bool, "null_hypothesis": bool,
+    #  "dropped_items": list[str]}. Must be a declared channel or LangGraph
+    # drops it when the node returns it (undeclared keys are silently
+    # discarded by StateGraph), so it would never reach the backend response.
+    attack_grounding: Optional[dict]
 
     # --- Network Troubleshooting Agent (misconfiguration hypothesis) ------
     is_misconfiguration: Optional[float]
     misconfig_reasoning: Optional[str]
     # {"summary": str, "taxonomy_category": str, "evidence": list[str]}
     misconfig_hypothesis: Optional[dict]
+    # v2 reasoning only -- grounding-validator result for the misconfig side
+    # (same shape as attack_grounding above).
+    misconfig_grounding: Optional[dict]
+    # v2 reasoning only -- True when a firewall/router log was supplied for
+    # this incident, False when only a PCAP arrived. Drives the arbiter's
+    # "no configuration evidence supplied" note and 0.6 confidence cap.
+    # Declared here for the same reason as the grounding fields above.
+    config_evidence_supplied: Optional[bool]
 
     # --- Dialectical Arbiter ---------------------------------------------
     # list of {"challenged_agent": "threat_hunting" | "troubleshooting",

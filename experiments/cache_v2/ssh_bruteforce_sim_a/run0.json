@@ -1,0 +1,29 @@
+{
+  "scenario_id": "ssh_bruteforce_sim_a",
+  "run_idx": 0,
+  "feature_version": "v2",
+  "ml_only": true,
+  "packet_features": {
+    "packet_count": 6.0,
+    "byte_count": 424.0,
+    "duration_s": 0.002346038818359375,
+    "packets_per_sec": 2557.5024390243902,
+    "bytes_per_sec": 180730.17235772358,
+    "mean_inter_arrival": 469.207763671875,
+    "std_inter_arrival": 478.87958372595574,
+    "syn_count": 1.0,
+    "synack_count": 0.0,
+    "rst_count": 0.0,
+    "ssh_auth_attempts": 0,
+    "protocol": 6.0,
+    "feature_version": "v2",
+    "flow_count": 60,
+    "top_talker_ip": null,
+    "top_dst_port": null
+  },
+  "ml_prediction": {
+    "attack_probability": 0.06666666666666665,
+    "predicted_class": "Benign",
+    "anomaly_score": 0.06876197388122368
+  }
+}

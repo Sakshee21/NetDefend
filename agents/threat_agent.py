@@ -14,6 +14,8 @@ from typing import Optional
 
 from agents.state_schema import NetDefendState
 from agents.llm_client import call_llm, parse_json_response
+from agents.config import get_reasoning_version
+from agents import grounding
 from knowledge.mitre.lookup import lookup_ttp
 
 
@@ -85,13 +87,34 @@ def run_threat_agent(state: NetDefendState) -> dict:
     print(f"[Threat Hunting Agent] mapped to {ttp_id} via {mapping_method} "
           f"(confidence={ttp_confidence:.2f})")
 
-    return {
+    update = {
         "ttp_id": ttp_id,
         "ttp_confidence": ttp_confidence,
         "ttp_mapping_method": mapping_method,
         "llm_call_failed": llm_call_failed,
         "threat_hypothesis": threat_hypothesis,
     }
+
+    # v2 reasoning (2): ground the attack hypothesis's cited evidence against
+    # the data it was built from -- drop items quoting values absent from that
+    # bundle, record the count, and flag the run. v1 is unchanged.
+    if get_reasoning_version() == "v2" and threat_hypothesis:
+        attack_bundle = {
+            "packet_features": packet_features,
+            "ml_prediction": ml_prediction,
+            "cross_flow_evidence": cross_flow_pattern,
+        }
+        kept, dropped_n, dropped_items = grounding.validate_items(
+            threat_hypothesis.get("evidence", []), attack_bundle)
+        threat_hypothesis["evidence"] = kept
+        update["threat_hypothesis"] = threat_hypothesis
+        update["attack_grounding"] = {
+            "evidence_dropped": dropped_n, "flagged": dropped_n > 0,
+            # The verbatim text of each dropped (ungrounded) evidence item.
+            "dropped_items": dropped_items,
+        }
+
+    return update
 
 
 def _resolve_ttp(
@@ -109,7 +132,11 @@ def _resolve_ttp(
     is exactly the silent-failure ambiguity downstream eval/ablation code
     needs to be able to tell apart.
     """
-    match = lookup_ttp(ml_prediction, packet_features)
+    # Under v2 reasoning, let the deterministic table also consult cross-flow
+    # evidence (e.g. the UDP port-scan pattern). v1 passes no cross_flow, so
+    # the table behaves exactly as before.
+    cf = cross_flow_pattern if get_reasoning_version() == "v2" else None
+    match = lookup_ttp(ml_prediction, packet_features, cross_flow=cf)
     if match:
         return (
             match["ttp_id"],

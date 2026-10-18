@@ -60,6 +60,13 @@ from pathlib import Path
 
 from agents.llm_client import call_llm, parse_json_response
 from agents.state_schema import NetDefendState
+from agents.config import get_reasoning_version
+from agents import grounding
+
+# v2 reasoning sentinel: a misconfiguration hypothesis that cites no concrete
+# configuration artifact present in the evidence is replaced by this null
+# hypothesis, which the arbiter is not allowed to let win.
+NO_MISCONFIG_EVIDENCE = "NO_MISCONFIG_EVIDENCE"
 
 
 # ======================================================
@@ -419,8 +426,10 @@ def _build_incident_evidence(state: NetDefendState) -> dict:
     except (TypeError, ValueError):
         protocol_name = None
 
-    network_observation = {
-        "flow_count": packet_features.get("flow_count"),
+    # Values are grouped so the LLM cannot mistake one representative flow's
+    # numbers for capture-wide behaviour. Numbers are unchanged from before;
+    # only the labelling/grouping and the scope note are added.
+    representative_flow = {
         "packet_count": packet_features.get("packet_count"),
         "byte_count": packet_features.get("byte_count"),
         "duration_s": packet_features.get("duration_s"),
@@ -430,8 +439,37 @@ def _build_incident_evidence(state: NetDefendState) -> dict:
         "synack_count": packet_features.get("synack_count"),
         "rst_count": packet_features.get("rst_count"),
         "protocol": protocol_name,
-        "source_ip": packet_features.get("top_talker_ip"),
-        "destination_port": packet_features.get("top_dst_port"),
+    }
+    # source_ip / destination_port fidelity. Under v2, prefer the selected
+    # flow's own 5-tuple (now re-attached in the packet agent), fall back to
+    # the cross-flow subject_source and the cross-flow destination port, and
+    # OMIT the field entirely when genuinely unrecoverable -- never report a
+    # misleading null. v1 keeps the original behaviour (always include, even
+    # when null).
+    if get_reasoning_version() == "v2":
+        src_ip = packet_features.get("top_talker_ip") or cross_flow_pattern.get("subject_source")
+        dst_port = packet_features.get("top_dst_port")
+        if not dst_port:
+            dst_port = (cross_flow_pattern.get("destination") or {}).get("port")
+        if src_ip:
+            representative_flow["source_ip"] = src_ip
+        if dst_port:
+            representative_flow["destination_port"] = dst_port
+    else:
+        representative_flow["source_ip"] = packet_features.get("top_talker_ip")
+        representative_flow["destination_port"] = packet_features.get("top_dst_port")
+    network_observation = {
+        "scope_note": (
+            "The fields under 'representative_flow' describe ONE flow selected "
+            "from the capture; the fields under 'capture_wide' summarise all "
+            "flows. The ML models (see ml_evidence) score ONLY the "
+            "representative flow, not the cross-flow behaviour reported under "
+            "'cross_flow_evidence'."
+        ),
+        "representative_flow": representative_flow,
+        "capture_wide": {
+            "flow_count": packet_features.get("flow_count"),
+        },
     }
 
     ml_evidence = {
@@ -462,7 +500,7 @@ def _build_incident_evidence(state: NetDefendState) -> dict:
         "protocol": protocol_name,
     }
 
-    return {
+    bundle = {
         "network_observation": network_observation,
         "cross_flow_evidence": cross_flow_pattern,
         "ml_evidence": ml_evidence,
@@ -470,6 +508,16 @@ def _build_incident_evidence(state: NetDefendState) -> dict:
         "log_evidence": log_evidence,
         "context": context,
     }
+
+    # v2 reasoning: when the captured firewall ruleset has no custom rules,
+    # state that neutrally and factually, without interpreting what it means
+    # for the verdict. v1 leaves configuration_evidence empty as before.
+    if get_reasoning_version() == "v2" and grounding.ruleset_has_no_custom_rules(bundle):
+        bundle["configuration_evidence"] = {
+            "firewall_ruleset": "default ACCEPT only, no custom rules",
+        }
+
+    return bundle
 
 
 def _hypothesis_to_score(hypothesis: str, confidence: float) -> float:
@@ -494,6 +542,64 @@ def _hypothesis_to_score(hypothesis: str, confidence: float) -> float:
     return 0.5  # UNCERTAIN
 
 
+def _apply_v2_reasoning(result: dict, hypothesis: str, incident_evidence: dict) -> dict:
+    """v2 reasoning post-processing for the misconfiguration hypothesis:
+
+    (2) Grounding validator: drop every cited evidence item that quotes a
+        concrete value absent from the evidence bundle, record how many were
+        dropped, and flag the run if any were.
+    (1) Null-hypothesis rule (bundle-based): the misconfiguration hypothesis is
+        null -- which the arbiter is not allowed to let win -- if, and only if,
+        the evidence bundle itself contains NO configuration artifact (no
+        custom firewall rule, no log / LOG-target line, no resolver/DNS setting
+        beyond defaults). When the bundle DOES contain an artifact the
+        hypothesis is not nulled even if the agent returned
+        NO_CLEAR_MISCONFIGURATION or UNCERTAIN, and the debate runs as in v1.
+        ``hypothesis`` is recorded for context but does not drive the decision.
+
+    Returns the updated result dict with a ``misconfig_grounding`` block.
+    """
+    mh = result["misconfig_hypothesis"]
+    kept, dropped_n, dropped_items = grounding.validate_items(
+        mh.get("evidence", []), incident_evidence)
+    mh["evidence"] = kept
+
+    if grounding.bundle_has_config_artifact(incident_evidence):
+        null_hypothesis = False
+        null_reason = None
+    else:
+        null_hypothesis = True
+        null_reason = (
+            "v2 null rule: the evidence bundle contains no configuration "
+            "artifact (no custom firewall rule, log/LOG-target line, or "
+            "resolver/DNS setting beyond defaults), so the misconfiguration "
+            "hypothesis has nothing to rest on and is recorded as a null "
+            "hypothesis that cannot win adjudication. (Agent hypothesis was %s.)"
+            % hypothesis
+        )
+
+    if null_hypothesis:
+        result["misconfig_hypothesis"] = {
+            "summary": ("No misconfiguration evidence: the agent did not claim "
+                        "a grounded misconfiguration for this incident."),
+            "taxonomy_category": NO_MISCONFIG_EVIDENCE,
+            "evidence": [],
+            "null_hypothesis": True,
+        }
+        # A null hypothesis carries no misconfiguration support.
+        result["is_misconfiguration"] = 0.0
+        result["misconfig_reasoning"] = null_reason
+
+    result["misconfig_grounding"] = {
+        "evidence_dropped": dropped_n,
+        "flagged": dropped_n > 0,
+        "null_hypothesis": null_hypothesis,
+        # The verbatim text of each dropped (ungrounded) evidence item.
+        "dropped_items": dropped_items,
+    }
+    return result
+
+
 def run_troubleshooting_agent(state: NetDefendState) -> dict:
     """Propose a misconfiguration hypothesis for the same anomaly.
 
@@ -508,6 +614,14 @@ def run_troubleshooting_agent(state: NetDefendState) -> dict:
     print("[Network Troubleshooting Agent] running...")
 
     incident_evidence = _build_incident_evidence(state)
+
+    # Whether any firewall/evidence file was actually supplied for this
+    # incident (not just whether it had custom rules). Used by the arbiter
+    # under v2 to add the "no configuration evidence supplied" note and cap
+    # confidence; it does not change the null gate (an empty bundle is still
+    # null). Absent evidence -> the log_evidence note is set, not a raw excerpt.
+    log_evidence = incident_evidence.get("log_evidence") or {}
+    config_evidence_supplied = bool(log_evidence.get("raw_log_excerpt"))
 
     try:
         llm_result = investigate(incident_evidence)
@@ -527,19 +641,30 @@ def run_troubleshooting_agent(state: NetDefendState) -> dict:
             "evidence": llm_result.get("evidence", []),
         }
 
-        print(f"[Network Troubleshooting Agent] hypothesis={hypothesis} "
-              f"confidence={confidence:.2f} -> "
-              f"is_misconfiguration={is_misconfiguration:.2f}")
-
-        return {
+        result = {
             "is_misconfiguration": is_misconfiguration,
             "misconfig_reasoning": misconfig_reasoning,
             "misconfig_hypothesis": misconfig_hypothesis,
         }
 
+        if get_reasoning_version() == "v2":
+            result = _apply_v2_reasoning(result, hypothesis, incident_evidence)
+        result["config_evidence_supplied"] = config_evidence_supplied
+
+        mh = result["misconfig_hypothesis"]
+        print(f"[Network Troubleshooting Agent] hypothesis={hypothesis} "
+              f"confidence={confidence:.2f} -> "
+              f"is_misconfiguration={result['is_misconfiguration']:.2f}"
+              f"{' [NULL: no config artifact]' if mh.get('null_hypothesis') else ''}"
+              f"{'' if config_evidence_supplied else ' [no config evidence supplied]'}")
+
+        return result
+
     except Exception as exc:  # noqa: BLE001 -- degrade gracefully, don't crash the pipeline
         print(f"[Network Troubleshooting Agent] Groq call failed: {exc}")
-        return dict(_FALLBACK_RESULT)
+        fallback = dict(_FALLBACK_RESULT)
+        fallback["config_evidence_supplied"] = config_evidence_supplied
+        return fallback
 
 
 # ======================================================

@@ -1,0 +1,195 @@
+{
+  "created_utc": "2026-10-18T06:08:44.509292+00:00",
+  "planned_run": "v2 feature + v2 reasoning over all 23 scenarios, runs=1",
+  "feature_version": "v2",
+  "reasoning_version": "v2",
+  "groq_models": {
+    "heavy": "openai/gpt-oss-120b",
+    "light": "openai/gpt-oss-20b",
+    "note": "threat hypothesis + TTP-fallback use heavy; troubleshooting, arbiter, response use light"
+  },
+  "ml_models": {
+    "rf_intrusion_detector": {
+      "file": "ml/models/rf_intrusion_detector.joblib",
+      "sha256_16": "d1272598d3720333",
+      "bytes": 187990177
+    },
+    "isolation_forest": {
+      "file": "ml/models/isolation_forest.joblib",
+      "sha256_16": "73fa1a2ab3b5b5a3",
+      "bytes": 1538281
+    },
+    "isolation_forest_scaler": {
+      "file": "ml/models/isolation_forest_scaler.joblib",
+      "sha256_16": "eb68b0a04d276b97",
+      "bytes": 1351
+    },
+    "label_encoder": {
+      "file": "ml/models/label_encoder.joblib",
+      "sha256_16": "c329c38baf9a8fe1",
+      "bytes": 699
+    },
+    "protocol_encoder": {
+      "file": "ml/models/protocol_encoder.joblib",
+      "sha256_16": "fd6f740a9ff96c5c",
+      "bytes": 486
+    }
+  },
+  "sklearn": {
+    "installed": "1.6.1",
+    "expected": "1.6.1"
+  },
+  "thresholds": {
+    "C1_threshold_attack_prob": 0.5,
+    "udp_scan_min_distinct_ports": 10,
+    "udp_scan_max_distinct_hosts": 1,
+    "ssh_bruteforce_min_auth_attempts": 5,
+    "flood_min_packets_per_sec": 1000
+  },
+  "C3_fusion_prior": "ttp_confidence",
+  "C3_tie_rule": "tie -> ATTACK",
+  "v2_feature_changes": [
+    "mean/std_inter_arrival x1e6 (us)",
+    "syn_count = pure SYN (SYN & !ACK)",
+    "ssh_auth_attempts constant 0"
+  ],
+  "v2_reasoning_changes": [
+    "grounding validator (drop cited evidence items quoting values absent from the bundle)",
+    "misconfig null rule is BUNDLE-BASED: null iff the evidence bundle contains no configuration artifact (no custom firewall rule, no log/LOG-target line, no resolver/DNS setting beyond defaults); a bundle with an artifact is never nulled, even for NO_CLEAR/UNCERTAIN",
+    "evidence-support adjudication rubric; conceded challenge not auto-loss; UNCERTAIN when both weak",
+    "null misconfig cannot win -> ATTACK or UNCERTAIN",
+    "neutral default-ruleset statement",
+    "UDP port-scan cross-flow -> T1046"
+  ],
+  "debate_protocol": "4 Groq calls (1 challenger + 2 isolated defenders + 1 adjudicator); unchanged",
+  "frozen": true,
+  "null_rule": "bundle-based (grounding.bundle_has_config_artifact)",
+  "preregistered_analysis": {
+    "conditions": {
+      "C1": "Random Forest only; ATTACK if P(attack) >= 0.5 else MISCONFIGURATION",
+      "C2": "attack-hypothesis-only; always ATTACK",
+      "C3": "rule-based fusion; higher prior confidence wins, tie -> ATTACK",
+      "C3+gate": "SUPPLEMENTARY: C3 fusion applied after the bundle-based null gate; if the misconfiguration side is null (bundle holds no configuration artifact) the verdict is ATTACK. Computed from cached upstream only, no LLM.",
+      "C4": "full Dialectical Arbiter (may return UNCERTAIN)"
+    },
+    "primary_holm_family": {
+      "tests": [
+        "C4_vs_C1",
+        "C4_vs_C2",
+        "C4_vs_C3"
+      ],
+      "correction": "Holm over 3 tests; UNCHANGED from the primary pre-registration"
+    },
+    "extra_pre_declared_test": {
+      "test": "C4_vs_C3+gate",
+      "status": "separate, pre-declared; NOT added to the primary family",
+      "reporting": "also report a Holm correction over all FOUR tests (C4 vs C1/C2/C3/C3+gate), clearly labelled as the all-four correction distinct from the primary-3"
+    },
+    "headline_metric": "disambiguation accuracy (verdict == ground truth; UNCERTAIN counts incorrect)",
+    "secondary_metrics": [
+      "false_positive_rate",
+      "escalation_rate",
+      "selective_accuracy",
+      "precision",
+      "recall",
+      "F1",
+      "mitre_mapping_accuracy_on_mapped_subset",
+      "latency",
+      "tokens_and_calls"
+    ],
+    "bootstrap": "scenario-cluster bootstrap, 10000 draws, seed 1234; paired bootstrap for deltas; exact McNemar on scenario-level correctness",
+    "robustness_set": {
+      "scenarios": [
+        "tcp_port_scan_robust_a",
+        "udp_port_scan_robust_a",
+        "icmp_host_sweep_robust_a",
+        "ssh_bruteforce_sim_robust_a"
+      ],
+      "label": "ATTACK",
+      "family_namespace": "robustness_*",
+      "excluded_from_benchmark": true,
+      "discovery": "excluded from list_scenarios() and regen benchmark_scenarios(); reachable only via --only",
+      "result_file": "dataset/raw/robustness_results.json (generator) + its own harness rows tagged separately",
+      "success_criterion": "stay ATTACK or UNCERTAIN despite bundle_has_config_artifact=True (unrelated benign rule present); a MISCONFIGURATION verdict is a robustness failure",
+      "generation": "sudo <venv> mininet/scenarios/generate_robustness_scenarios.py --outdir dataset/raw (requires root + OVS daemon)"
+    },
+    "v1_vs_v2_reporting": {
+      "v1_reference": "committed experiments/results (19 of 23 scenarios, N=1); frozen, never overwritten",
+      "v2_run": "feature v2 + reasoning v2 over all 23 scenarios, outputs under experiments/cache_v2 / results_v2",
+      "report": "side-by-side per-true-class means (disambiguation, FPR) and per-scenario verdicts; state that v2 corrects feature units and adds the null gate / grounding / evidence-support rubric; report honestly whether v2 changes the C3-vs-C4 picture",
+      "no_tuning": "no threshold, prior, prompt or scenario was tuned against scenario outcomes"
+    }
+  },
+  "v2_evidence_fixes": [
+    {
+      "change": "cross_flow capture_wide_totals",
+      "problem": "cross_flow_pattern.flow_count and time_span_s describe the DETECTED pattern group only, so they read 0 when pattern==none_detected even though the capture holds real flows (e.g. dns_misconfig_A: 0 shown, 18 subject flows actually present).",
+      "fix": "under reasoning v2 (evidence v2), add a separate capture_wide_totals field with true totals: subject_source, subject_flow_count, distinct_dst_ports, distinct_dst_hosts, time_span_s, total_flows_in_capture, and the pattern label kept as its own field.",
+      "scope": "additive evidence only; does NOT change pattern detection, the pattern label, cross_flow_pattern.flow_count/time_span_s, or any numeric feature value scored by the ML models. Absent under v1.",
+      "gated_by": "NETDEFEND_REASONING_VERSION=v2",
+      "test": "tests/test_capture_wide_totals.py (synthetic no-pattern capture, 5 UDP flows -> subject_flow_count=5, distinct_dst_ports=5, time_span_s=4.0; v1 has no capture_wide_totals)",
+      "dns_misconfig_A_after_fix": {
+        "subject_flow_count": 18,
+        "distinct_dst_ports": 1,
+        "distinct_dst_hosts": 1,
+        "time_span_s": 17.5628,
+        "total_flows_in_capture": 36,
+        "pattern": "none_detected",
+        "null_decision": "not null (resolver artifact present)"
+      }
+    },
+    {
+      "change": "representative_flow source_ip/destination_port fidelity",
+      "problem": "calculate_features drops the 5-tuple, so representative_flow.source_ip/destination_port were reported as null (e.g. udp_port_scan_a, tcp_syn_burst_a).",
+      "fix": "under v2, re-attach the selected flow 5-tuple in the packet agent (extra context columns only; selection and ML features unchanged) and in the evidence builder prefer flow src/dst, fall back to cross_flow subject_source and destination port, and OMIT the field when genuinely unrecoverable.",
+      "gated_by": "NETDEFEND_REASONING_VERSION=v2",
+      "test": "tests/test_evidence_fidelity_v2.py",
+      "before_after": {
+        "udp_port_scan_a": {
+          "v1": {
+            "source_ip": null,
+            "destination_port": null
+          },
+          "v2": {
+            "source_ip": "10.0.0.1",
+            "destination_port": 1
+          }
+        },
+        "tcp_syn_burst_a": {
+          "v1": {
+            "source_ip": null,
+            "destination_port": null
+          },
+          "v2": {
+            "source_ip": "10.0.0.1",
+            "destination_port": 8000
+          }
+        }
+      }
+    },
+    {
+      "change": "config_evidence_supplied",
+      "rule": "when NO firewall/evidence file is supplied: the bundle-based null gate still prevents MISCONFIGURATION, the arbiter verdict carries the note 'no configuration evidence supplied', and confidence is capped at 0.6. If evidence IS supplied (even default-only), behaviour is unchanged.",
+      "gated_by": "NETDEFEND_REASONING_VERSION=v2",
+      "test": "tests/test_evidence_fidelity_v2.py"
+    }
+  ],
+  "backend_ui": {
+    "versions_source": "environment only (NETDEFEND_FEATURE_VERSION / NETDEFEND_REASONING_VERSION); default stays v1; printed at server start",
+    "analyze_response_added": [
+      "versions",
+      "config_evidence_supplied",
+      "cross_flow_pattern (incl. capture_wide_totals)",
+      "grounding{attack,misconfig}.evidence_dropped/flagged",
+      "misconfig_hypothesis.null_hypothesis"
+    ],
+    "ui_added": [
+      "version badges",
+      "null state text: No configuration artifact in the evidence - misconfiguration cannot be supported",
+      "capture-wide totals panel",
+      "dropped-evidence counts",
+      "verdict note: No configuration evidence supplied"
+    ],
+    "demo_launch_v2": "NETDEFEND_FEATURE_VERSION=v2 NETDEFEND_REASONING_VERSION=v2 ./venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000"
+  }
+}

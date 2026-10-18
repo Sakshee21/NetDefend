@@ -1,0 +1,8 @@
+metric,count,of_total_runs
+total_runs,19,19
+runs_failed_then_retried_ok,9,19
+runs_decided_by_arbiter_fallback,0,19
+runs_json_repaired,8,19
+runs_hypothesis_agent_failed,0,19
+runs_excluded_total,0,19
+C4_uncertain_verdicts,0,19

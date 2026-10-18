@@ -32,3 +32,4 @@ logs/*.log
 paper/
 
 CLAUDE.md
+.env.bak.*

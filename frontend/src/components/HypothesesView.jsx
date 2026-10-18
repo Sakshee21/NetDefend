@@ -1,5 +1,5 @@
 import { agentInfo, challengerOf, percent, titleCase, tone } from '../lib/format'
-import { IconAlert, IconGavel, IconTarget, IconWrench } from '../lib/icons'
+import { IconAlert, IconFlow, IconGavel, IconTarget, IconWrench } from '../lib/icons'
 import IncidentReport from './IncidentReport'
 import './DialecticalDebate.css'
 import './HypothesesView.css'
@@ -21,8 +21,18 @@ export default function HypothesesView({ report }) {
     refutation_exchange: exchange = [],
     arbiter_verdict: verdict,
     final_report: finalReport,
+    versions,
+    cross_flow_pattern: crossFlow,
+    grounding,
     note,
   } = report
+
+  const isV2 =
+    versions?.feature_version === 'v2' || versions?.reasoning_version === 'v2'
+  const captureWide = crossFlow?.capture_wide_totals
+  const misconfigNull =
+    misconfig?.null_hypothesis === true ||
+    misconfig?.taxonomy_category === 'NO_MISCONFIG_EVIDENCE'
 
   return (
     <div className="debate hypotheses-view">
@@ -30,6 +40,17 @@ export default function HypothesesView({ report }) {
         <div className="banner-note">
           <IconAlert width={15} height={15} />
           <span>{note}</span>
+        </div>
+      )}
+
+      {versions && (
+        <div className="version-badges" aria-label="Pipeline version">
+          <span className={`version-chip mono${isV2 ? ' is-v2' : ''}`}>
+            Evidence {versions.reasoning_version ?? 'v1'}
+          </span>
+          <span className={`version-chip mono${versions.feature_version === 'v2' ? ' is-v2' : ''}`}>
+            Features {versions.feature_version ?? 'v1'}
+          </span>
         </div>
       )}
 
@@ -49,6 +70,8 @@ export default function HypothesesView({ report }) {
           evidence={threat?.evidence ?? []}
           confidence={threat?.confidence}
           llmCallFailed={threat?.llm_call_failed}
+          droppedCount={grounding?.attack?.evidence_dropped}
+          droppedItems={grounding?.attack?.dropped_items}
           prevailed={verdict?.classification === 'ATTACK'}
         />
 
@@ -63,15 +86,26 @@ export default function HypothesesView({ report }) {
           Icon={IconWrench}
           agent="Network Troubleshooting Agent"
           stance="Misconfiguration hypothesis"
-          summary={misconfig?.summary}
+          summary={
+            misconfigNull
+              ? 'No configuration artifact in the evidence — misconfiguration cannot be supported.'
+              : misconfig?.summary
+          }
           tagLabel="Taxonomy"
-          tagValue={misconfig?.taxonomy_category ?? 'Uncategorised'}
+          tagValue={
+            misconfigNull ? 'Null — no config artifact' : misconfig?.taxonomy_category ?? 'Uncategorised'
+          }
           evidence={misconfig?.evidence ?? []}
           confidence={misconfig?.is_misconfiguration}
           llmCallFailed={misconfig?.taxonomy_category === 'LLM_UNAVAILABLE'}
+          isNull={misconfigNull}
+          droppedCount={grounding?.misconfig?.evidence_dropped}
+          droppedItems={grounding?.misconfig?.dropped_items}
           prevailed={verdict?.classification === 'MISCONFIGURATION'}
         />
       </section>
+
+      {captureWide && <CaptureWideEvidence totals={captureWide} />}
 
       {exchange.length > 0 && <RefutationExchange exchange={exchange} />}
 
@@ -98,10 +132,18 @@ function ArgumentColumn({
   evidence,
   confidence,
   llmCallFailed,
+  isNull,
+  droppedCount,
+  droppedItems,
   prevailed,
 }) {
+  const dropped = Array.isArray(droppedItems) ? droppedItems : []
+  // Prefer the actual list length; fall back to the count field.
+  const nDropped = dropped.length || (droppedCount ?? 0)
   return (
-    <article className={`argument ${side}${prevailed ? ' is-prevailing' : ''}`}>
+    <article
+      className={`argument ${side}${prevailed ? ' is-prevailing' : ''}${isNull ? ' is-null' : ''}`}
+    >
       <header className="argument-head">
         <span className="argument-icon">
           <Icon width={17} height={17} />
@@ -119,10 +161,42 @@ function ArgumentColumn({
             LLM call failed
           </span>
         )}
-        {prevailed && !llmCallFailed && <span className="prevail-flag mono">Upheld</span>}
+        {isNull && !llmCallFailed && (
+          <span
+            className="null-flag mono"
+            title="v2 bundle-based null rule: the evidence bundle holds no configuration artifact, so this hypothesis is null and cannot win adjudication."
+          >
+            <IconAlert width={12} height={12} />
+            Null — no config artifact
+          </span>
+        )}
+        {prevailed && !llmCallFailed && !isNull && (
+          <span className="prevail-flag mono">Upheld</span>
+        )}
       </header>
 
       <blockquote className="argument-summary">{summary || 'No summary returned.'}</blockquote>
+
+      {nDropped > 0 && (
+        <details className="grounding-drop">
+          <summary className="grounding-note mono" title="Grounding validator (v2): cited evidence items that quoted a value not present in the evidence bundle were dropped.">
+            <IconAlert width={11} height={11} />
+            Dropped as ungrounded ({nDropped})
+          </summary>
+          {dropped.length > 0 ? (
+            <ul className="grounding-drop-list">
+              {dropped.map((item, index) => (
+                <li key={`${index}-${item}`}>{item}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted grounding-drop-empty">
+              {nDropped} item{nDropped === 1 ? '' : 's'} dropped (text not available
+              in this response).
+            </p>
+          )}
+        </details>
+      )}
 
       <div className="argument-tag-row">
         <div className="argument-tag">
@@ -150,6 +224,48 @@ function ArgumentColumn({
         </ul>
       </div>
     </article>
+  )
+}
+
+/**
+ * v2 capture-wide evidence: the true totals across the whole capture
+ * (flows from the subject source, distinct ports/hosts, time span), shown
+ * separately from the pattern label so a "none_detected" pattern no longer
+ * reads as if there were zero flows. These are evidence for the reasoning
+ * agents only; the ML models never score them.
+ */
+function CaptureWideEvidence({ totals }) {
+  const span = totals.time_span_s
+  const stats = [
+    { label: 'Flows (subject)', value: totals.subject_flow_count },
+    { label: 'Flows (capture)', value: totals.total_flows_in_capture },
+    { label: 'Distinct dst ports', value: totals.distinct_dst_ports },
+    { label: 'Distinct dst hosts', value: totals.distinct_dst_hosts },
+    { label: 'Time span', value: span != null ? `${Number(span).toFixed(2)} s` : '—' },
+  ]
+  return (
+    <section className="panel capture-wide">
+      <header className="panel-head">
+        <div>
+          <p className="eyebrow">Capture-wide evidence</p>
+          <h2 className="panel-title" style={{ marginTop: 4 }}>
+            <IconFlow width={16} height={16} /> Totals across the whole capture
+          </h2>
+        </div>
+        <span className="chip">pattern: {totals.pattern ?? 'n/a'}</span>
+      </header>
+      <div className="capture-grid">
+        {stats.map((s) => (
+          <div className="capture-stat" key={s.label}>
+            <span className="eyebrow">{s.label}</span>
+            <span className="mono capture-value">{s.value ?? '—'}</span>
+          </div>
+        ))}
+      </div>
+      {totals.subject_source && (
+        <p className="capture-source mono">subject source: {totals.subject_source}</p>
+      )}
+    </section>
   )
 }
 
@@ -248,6 +364,7 @@ function ArbiterVerdict({ verdict }) {
 
   const isUncertain = classification === 'UNCERTAIN'
   const isFallback = (verdict.reasoning ?? '').includes('fallback rule used')
+  const noConfigEvidence = (verdict.note ?? '') === 'no configuration evidence supplied'
 
   return (
     <section className={`verdict ${toneClass}`}>
@@ -271,6 +388,13 @@ function ArbiterVerdict({ verdict }) {
             <span className="verdict-flag is-escalated mono">
               <IconAlert width={12} height={12} />
               Escalated for human review
+            </span>
+          )}
+          {noConfigEvidence && (
+            <span className="verdict-flag is-escalated mono"
+              title="No firewall/evidence file was supplied, so a configuration explanation could not be assessed. The verdict's confidence is capped at 0.6.">
+              <IconAlert width={12} height={12} />
+              No configuration evidence supplied
             </span>
           )}
         </div>

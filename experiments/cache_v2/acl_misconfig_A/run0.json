@@ -1,0 +1,29 @@
+{
+  "scenario_id": "acl_misconfig_A",
+  "run_idx": 0,
+  "feature_version": "v2",
+  "ml_only": true,
+  "packet_features": {
+    "packet_count": 2.0,
+    "byte_count": 148.0,
+    "duration_s": 1.0198440551757812,
+    "packets_per_sec": 1.9610841381580424,
+    "bytes_per_sec": 145.12022622369514,
+    "mean_inter_arrival": 1019844.0551757812,
+    "std_inter_arrival": 0.0,
+    "syn_count": 2.0,
+    "synack_count": 0.0,
+    "rst_count": 0.0,
+    "ssh_auth_attempts": 0,
+    "protocol": 6.0,
+    "feature_version": "v2",
+    "flow_count": 16,
+    "top_talker_ip": null,
+    "top_dst_port": null
+  },
+  "ml_prediction": {
+    "attack_probability": 0.20666666666666667,
+    "predicted_class": "Benign",
+    "anomaly_score": 0.09641937101296444
+  }
+}

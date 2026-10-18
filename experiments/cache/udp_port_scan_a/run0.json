@@ -1,0 +1,136 @@
+{
+  "scenario_id": "udp_port_scan_a",
+  "run_idx": 0,
+  "tag": "d1",
+  "packet_features": {
+    "packet_count": 1.0,
+    "byte_count": 47.0,
+    "duration_s": 0.0,
+    "packets_per_sec": 0.0,
+    "bytes_per_sec": 0.0,
+    "mean_inter_arrival": 0.0,
+    "std_inter_arrival": 0.0,
+    "syn_count": 0.0,
+    "synack_count": 0.0,
+    "rst_count": 0.0,
+    "ssh_auth_attempts": 0.0,
+    "protocol": 17.0,
+    "flow_count": 31,
+    "top_talker_ip": null,
+    "top_dst_port": null
+  },
+  "cross_flow_pattern": {
+    "destination": {
+      "ip": null,
+      "port": null
+    },
+    "flow_count": 0,
+    "total_syn_count": 0,
+    "total_synack_count": 0,
+    "time_span_s": 0.0,
+    "pattern": "none_detected",
+    "subject_source": "10.0.0.1",
+    "distinct_dst_ports": 30,
+    "distinct_dst_hosts": 1,
+    "prior_successful_flows": 0,
+    "retry_interval_cv": null
+  },
+  "ml_prediction": {
+    "attack_probability": 0.17333333333333334,
+    "predicted_class": "Benign",
+    "anomaly_score": 0.20818811327188674
+  },
+  "attack_hypothesis": {
+    "ttp_id": "T1046",
+    "ttp_confidence": 0.71,
+    "threat_hypothesis": {
+      "summary": "Source IP 10.0.0.1 contacted many destination ports on a single host, matching the pattern of network service scanning (T1046).",
+      "evidence": [
+        "Cross\u2011flow data reports the subject_source as 10.0.0.1",
+        "Cross\u2011flow data shows 30 distinct destination ports were contacted",
+        "Cross\u2011flow data shows all traffic targeted a single distinct destination host",
+        "The representative flow has a flow_count of 31",
+        "Total SYN count across all flows is 0 and total SYN\u2011ACK count is 0",
+        "ML prediction labeled the flow as Benign with an attack_probability of 0.17333333333333334",
+        "The representative flow lasted 0.0 seconds, contained 1 packet and 47 bytes"
+      ]
+    },
+    "llm_call_failed": false
+  },
+  "misconfig_hypothesis": {
+    "is_misconfiguration": 0.5,
+    "hypothesis": {
+      "summary": "Observed 31 short UDP flows from 10.0.0.1 to a single destination host with no firewall rules configured. It is unclear whether the traffic is legitimate or should have been blocked, and no configuration evidence identifies a specific rule or misconfiguration that would explain the activity.",
+      "taxonomy_category": "NONE",
+      "evidence": [
+        "network_observation: 31 UDP flows, 1 packet per flow, no source/destination IP or port recorded",
+        "cross_flow_evidence: 30 distinct destination ports to one host, subject source 10.0.0.1",
+        "log_evidence: iptables policies set to ACCEPT on both hosts, no rules present",
+        "ml_evidence: Random Forest benign (0.173 probability of attack), Isolation Forest anomaly score 0.208"
+      ]
+    }
+  },
+  "latency_s": {
+    "packet": 0.091,
+    "intrusion": 0.101,
+    "threat": 2.906,
+    "troubleshooting": 8.051,
+    "arbiter": 46.717
+  },
+  "telemetry": {
+    "threat": {
+      "calls": 2,
+      "prompt_tokens": 1014,
+      "completion_tokens": 859,
+      "had_nonok": false,
+      "json_fail": false,
+      "repaired": false,
+      "statuses": [
+        "ok",
+        "ok"
+      ]
+    },
+    "troubleshooting": {
+      "calls": 1,
+      "prompt_tokens": 1715,
+      "completion_tokens": 1032,
+      "had_nonok": false,
+      "json_fail": false,
+      "repaired": false,
+      "statuses": [
+        "ok"
+      ]
+    },
+    "arbiter": {
+      "calls": 4,
+      "prompt_tokens": 3301,
+      "completion_tokens": 2013,
+      "had_nonok": false,
+      "json_fail": false,
+      "repaired": false,
+      "statuses": [
+        "ok",
+        "ok",
+        "ok",
+        "ok"
+      ]
+    }
+  },
+  "arbiter_verdict": {
+    "classification": "ATTACK",
+    "confidence": 0.9,
+    "reasoning": "The ATTACK rebuttal directly addressed the challenge, explaining that a UDP port\u2011scan naturally produces single\u2011packet UDP probes, accounts for the 31 flows vs 30 distinct ports, and justifies the absence of SYN/SYN\u2011ACK traffic. It also clarified the data artifact regarding missing source/destination in network_observation. The MISCONFIGURATION response admitted it could not explain the targeting pattern or packet size, effectively conceding. Thus the ATTACK hypothesis survived scrutiny."
+  },
+  "refutation_exchange": [
+    {
+      "challenged_agent": "threat_hunting",
+      "challenge": "Why does the attack hypothesis reconcile the presence of 31 one-packet UDP flows (network_observation shows 31 UDP flows, 1 packet per flow, no source/destination IP or port recorded) with the cross_flow evidence of 30 distinct destination ports to a single host (distinct_dst_ports:30) when an attacker would typically send SYN packets, yet total_syn_count and total_synack_count are both 0?",
+      "response": "The hypothesis relies on the cross_flow evidence that 10.0.0.1 contacted 30 distinct destination ports on a single host. The representative flow records 31 one\u2011packet UDP flows, which is exactly what a UDP port\u2011scan would produce: each flow targets a different port, and one of those ports is probed twice (31 flows vs 30 distinct ports). Because the traffic is UDP, no SYN or SYN\u2011ACK packets appear\u2014this is consistent with the total_syn_count and total_synack_count both being zero. The missing source/destination IP or port in the network_observation record is a data\u2011collection artifact; it does not contradict the cross_flow data, which clearly shows the same source IP (10.0.0.1), the single destination host, and the 30 distinct ports. Therefore the evidence fully supports the T1046 port\u2011scan hypothesis even though the flow consists of single\u2011packet UDP probes and lacks SYN traffic."
+    },
+    {
+      "challenged_agent": "troubleshooting",
+      "challenge": "Given that the cross_flow data records 31 flows with 30 distinct destination ports, 0 SYN and 0 SYN\u2011ACK packets, and the ML model labels the representative flow as benign with attack_probability 0.17333333333333334, how does the misconfiguration hypothesis explain the deliberate targeting of 30 distinct ports without generating any SYN traffic, and why would a misconfiguration result in 47 bytes per flow as observed?",
+      "response": "I cannot explain the deliberate targeting of 30 distinct ports without generating SYN traffic, nor the 47\u2011byte packet size, using only the evidence presented. The data do not contain packet headers, port numbers, or packet sizes, and the ML model output does not provide a causal explanation for the observed behavior. Without additional technical details, I must concede that this hypothesis does not address the challenge."
+    }
+  ]
+}

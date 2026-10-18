@@ -226,6 +226,28 @@ export default function App() {
                 Pipeline running
               </span>
             )}
+            {/* Active pipeline versions (from the backend `versions` field).
+                Null-safe: older/mock responses have no `versions`, so nothing
+                renders. A v1 on either axis is flagged as a visible warning. */}
+            {report?.versions && !running && (() => {
+              const fv = report.versions.feature_version ?? 'v1'
+              const rv = report.versions.reasoning_version ?? 'v1'
+              const isV1 = fv === 'v1' || rv === 'v1'
+              return (
+                <span
+                  className={`chip version-badge-header mono${isV1 ? ' is-warn' : ''}`}
+                  title={
+                    isV1
+                      ? 'This result was produced by a v1 pipeline path, not the frozen v2 pipeline.'
+                      : 'Frozen v2 pipeline (feature + reasoning).'
+                  }
+                >
+                  {isV1 && <IconAlert width={12} height={12} />}
+                  F:{fv} · R:{rv}
+                  {isV1 ? ' — v1!' : ''}
+                </span>
+              )
+            })()}
             {/* Verdict comes from report.classification in the mock shape,
                 or report.arbiter_verdict.classification in the real
                 backend shape. risk_level only exists in the mock (the

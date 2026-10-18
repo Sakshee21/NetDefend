@@ -1,0 +1,150 @@
+{
+  "scenario_id": "dns_misconfig_A",
+  "run_idx": 0,
+  "tag": "smoke2",
+  "packet_features": {
+    "packet_count": 1.0,
+    "byte_count": 94.0,
+    "duration_s": 0.0,
+    "packets_per_sec": 0.0,
+    "bytes_per_sec": 0.0,
+    "mean_inter_arrival": 0.0,
+    "std_inter_arrival": 0.0,
+    "syn_count": 0.0,
+    "synack_count": 0.0,
+    "rst_count": 0.0,
+    "ssh_auth_attempts": 0,
+    "protocol": 17.0,
+    "feature_version": "v2",
+    "flow_count": 42,
+    "top_talker_ip": null,
+    "top_dst_port": null
+  },
+  "cross_flow_pattern": {
+    "destination": {
+      "ip": null,
+      "port": null
+    },
+    "flow_count": 0,
+    "total_syn_count": 0,
+    "total_synack_count": 0,
+    "time_span_s": 0.0,
+    "pattern": "none_detected",
+    "subject_source": "10.0.0.1",
+    "distinct_dst_ports": 1,
+    "distinct_dst_hosts": 1,
+    "prior_successful_flows": 0,
+    "retry_interval_cv": 0.0098
+  },
+  "ml_prediction": {
+    "attack_probability": 0.16666666666666663,
+    "predicted_class": "Benign",
+    "anomaly_score": 0.20362427390026622
+  },
+  "attack_hypothesis": {
+    "ttp_id": "T1071",
+    "ttp_confidence": 0.42,
+    "threat_hypothesis": {
+      "summary": "A single short UDP flow from 10.0.0.1 may be attempting low\u2011volume command and control communication over an application layer protocol (T1071), though the model labels it benign with low attack probability.",
+      "evidence": [
+        "The flow contains exactly 1 packet with a total size of 94 bytes (packet_count = 1.0, byte_count = 94.0).",
+        "The protocol identifier is 17, indicating UDP traffic (protocol = 17.0).",
+        "Across the capture, 42 flows were observed but no SYN, SYN\u2011ACK, or RST packets were seen (total_syn_count = 0, total_synack_count = 0, syn_count = 0.0, rst_count = 0.0).",
+        "All observed flows originated from the same source IP (subject_source = \"10.0.0.1\") and targeted a single destination port and host (distinct_dst_ports = 1, distinct_dst_hosts = 1).",
+        "No recurring pattern was detected in the aggregate data (pattern = \"none_detected\", time_span_s = 0.0)."
+      ]
+    },
+    "llm_call_failed": false
+  },
+  "misconfig_hypothesis": {
+    "is_misconfiguration": 0.09999999999999998,
+    "hypothesis": {
+      "summary": "Only a single UDP packet from 10.0.0.1 was observed; no corresponding inbound traffic, firewall or kernel netfilter logs were generated, and the DNS resolver reports 18 queries served. ML models classify the flow as benign and no anomaly score is high.",
+      "taxonomy_category": "NONE",
+      "evidence": [
+        "representative_flow shows a single UDP packet with 94 bytes from 10.0.0.1",
+        "cross_flow_evidence indicates no additional flows or SYN activity",
+        "isolation_forest anomaly_score 0.20 (below typical anomaly threshold)",
+        "firewall_ruleset is default ACCEPT on INPUT, FORWARD, OUTPUT with no counters",
+        "no netfilter log entries for SRC=10.0.0.1",
+        "DNS resolver before traffic had no queries; after traffic served 18 DNS queries to example.com"
+      ]
+    }
+  },
+  "latency_s": {
+    "packet": 0.062,
+    "intrusion": 1.252,
+    "threat": 3.825,
+    "troubleshooting": 2.525,
+    "arbiter": 34.031
+  },
+  "telemetry": {
+    "threat": {
+      "calls": 2,
+      "prompt_tokens": 1033,
+      "completion_tokens": 1017,
+      "had_nonok": false,
+      "json_fail": false,
+      "repaired": false,
+      "statuses": [
+        "ok",
+        "ok"
+      ]
+    },
+    "troubleshooting": {
+      "calls": 1,
+      "prompt_tokens": 1943,
+      "completion_tokens": 1504,
+      "had_nonok": false,
+      "json_fail": false,
+      "repaired": false,
+      "statuses": [
+        "ok"
+      ]
+    },
+    "arbiter": {
+      "calls": 4,
+      "prompt_tokens": 3582,
+      "completion_tokens": 2701,
+      "had_nonok": false,
+      "json_fail": false,
+      "repaired": false,
+      "statuses": [
+        "ok",
+        "ok",
+        "ok",
+        "ok"
+      ]
+    }
+  },
+  "arbiter_verdict": {
+    "classification": "ATTACK",
+    "confidence": 0.7,
+    "reasoning": "The ATTACK hypothesis is supported by specific evidence: 42 distinct UDP flows from 10.0.0.1 each with a single 94\u2011byte packet, no SYN/SYN\u2011ACK/RST activity, and identical destination port/host. Its response to the challenge correctly aligns this evidence by noting that the hypothesis applies to every individual flow, not just one. The MISCONFIGURATION hypothesis, however, only cites a single packet and cannot reconcile the documented 42 flows, as shown in its own challenge response. Therefore the ATTACK hypothesis has stronger evidence backing its claim."
+  },
+  "refutation_exchange": [
+    {
+      "challenged_agent": "threat_hunting",
+      "challenge": "Given that the capture shows 42 distinct UDP flows from 10.0.0.1 to a single destination host and port, all occurring over 0.0 seconds with no SYN, SYN-ACK or RST packets, how does the ATTACK hypothesis explain the presence of those 42 flows when it only cites a single 94\u2011byte packet?",
+      "response": "The hypothesis does not assert that only one flow existed; it states that each flow from 10.0.0.1 to the destination is a single short UDP exchange, which is precisely what the evidence shows.  The data reports 42 distinct flows, yet for each flow the packet_count is 1.0 and byte_count is 94.0, the protocol is 17 (UDP), and no SYN/SYN\u2011ACK/RST packets appear.  Therefore every one of the 42 flows satisfies the same conditions described by the hypothesis: a single 94\u2011byte UDP packet with no TCP handshake traffic.  The hypothesis remains consistent with the presence of 42 flows because it applies to every individual flow, not only one.  No additional evidence is required to explain the multiplicity of flows; the existing evidence already demonstrates that all 42 flows share the same low\u2011volume command\u2011and\u2011control characteristics outlined in the hypothesis."
+    },
+    {
+      "challenged_agent": "troubleshooting",
+      "challenge": "The shared evidence indicates 42 UDP flows originating from 10.0.0.1, all with identical destination port and host and no SYN activity, yet the MISCONFIGURATION hypothesis claims only a single packet was observed. How does the MISCONFIGURATION hypothesis account for the 42 flows documented in the capture?",
+      "response": "The evidence we possess does not indicate the presence of 42 UDP flows. It only records a single UDP packet from 10.0.0.1, no additional flows, and no SYN activity. Since we lack evidence supporting the claim of 42 flows, we cannot reconcile that claim with the MISCONFIGURATION hypothesis based on the data we have."
+    }
+  ],
+  "feature_version": "v2",
+  "reasoning_version": "v2",
+  "grounding": {
+    "attack": {
+      "evidence_dropped": 1,
+      "flagged": true
+    },
+    "misconfig": {
+      "evidence_dropped": 1,
+      "flagged": true,
+      "null_hypothesis": false
+    }
+  }
+}

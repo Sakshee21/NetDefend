@@ -1,0 +1,4 @@
+comparison,delta_disambig_acc,acc_ci_lo,acc_ci_hi,delta_fpr,fpr_ci_lo,fpr_ci_hi,mcnemar_b,mcnemar_c,mcnemar_p,holm_p
+C4_vs_C1,0.211,-0.053,0.474,0.222,0.000,0.500,6,2,0.2891,0.8672
+C4_vs_C2,0.158,-0.158,0.474,-0.778,-1.000,-0.500,7,4,0.5488,1.0000
+C4_vs_C3,-0.105,-0.368,0.158,-0.111,-0.500,0.286,2,4,0.6875,1.0000

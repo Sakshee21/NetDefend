@@ -1,0 +1,8 @@
+scenario_id,gt_technique,C4_predicted_mitre,n_runs,n_correct_runs,match,mapped_scenarios_total,mapped_runs_total
+icmp_host_sweep_a,T1018,,1,0,False,7,7
+ssh_bruteforce_sim_a,T1110,T1498,1,0,False,7,7
+tcp_port_scan_a,T1046,T1046,1,1,True,7,7
+tcp_port_scan_b,T1046,T1046,1,1,True,7,7
+tcp_slow_scan_a,T1046,T1046,1,1,True,7,7
+udp_port_scan_a,T1046,T1046,1,1,True,7,7
+udp_port_scan_b,T1046,,1,0,False,7,7

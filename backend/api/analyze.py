@@ -13,6 +13,7 @@ from typing import Optional
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from agents.graph import app as pipeline_app
+from agents.config import get_feature_version, get_reasoning_version
 
 router = APIRouter()
 
@@ -97,9 +98,45 @@ def analyze(
     threat_hypothesis = result.get("threat_hypothesis") or {}
     misconfig_hypothesis = result.get("misconfig_hypothesis") or {}
 
+    # v2 surfacing. The pipeline honours NETDEFEND_FEATURE_VERSION /
+    # NETDEFEND_REASONING_VERSION (default v1), so these report which version
+    # actually produced THIS result, and the new evidence fields
+    # (capture-wide totals, grounding/null) are passed through only when the
+    # v2 paths populated them -- absent/None under v1.
+    def _grounding(g):
+        """Normalise a grounding block so dropped_items is always exposed as a
+        list (empty under v1 / when the agent produced none)."""
+        g = g or {}
+        return {
+            "evidence_dropped": g.get("evidence_dropped"),
+            "flagged": bool(g.get("flagged")),
+            "null_hypothesis": g.get("null_hypothesis"),
+            "dropped_items": list(g.get("dropped_items") or []),
+        }
+
+    attack_grounding = _grounding(result.get("attack_grounding"))
+    misconfig_grounding = _grounding(result.get("misconfig_grounding"))
+
     return {
+        "versions": {
+            "feature_version": get_feature_version(),
+            "reasoning_version": get_reasoning_version(),
+        },
+        # True when a firewall/evidence file was supplied for this incident;
+        # when False (v2), the arbiter_verdict carries a "no configuration
+        # evidence supplied" note and its confidence is capped at 0.6.
+        "config_evidence_supplied": result.get("config_evidence_supplied"),
         "packet_features": result.get("packet_features"),
         "ml_prediction": result.get("ml_prediction"),
+        # Cross-flow / capture-wide evidence (never scored by the ML models).
+        # Under v2 this carries capture_wide_totals with the true totals even
+        # when no pattern is detected (see agents/packet_agent.py).
+        "cross_flow_pattern": result.get("cross_flow_pattern"),
+        # Grounding-validator results per side (v2 reasoning only).
+        "grounding": {
+            "attack": attack_grounding,
+            "misconfig": misconfig_grounding,
+        },
         "threat_hypothesis": {
             "ttp_id": result.get("ttp_id"),
             "confidence": result.get("ttp_confidence"),
@@ -117,6 +154,10 @@ def analyze(
             "summary": misconfig_hypothesis.get("summary"),
             "taxonomy_category": misconfig_hypothesis.get("taxonomy_category"),
             "evidence": misconfig_hypothesis.get("evidence", []),
+            # v2 bundle-based null rule: True when the misconfiguration side
+            # was nulled because the evidence bundle held no configuration
+            # artifact (see agents/troubleshooting_agent._apply_v2_reasoning).
+            "null_hypothesis": bool(misconfig_hypothesis.get("null_hypothesis")),
         },
         # Real arbiter output, surfaced verbatim from the pipeline state.
         # refutation_exchange: list of

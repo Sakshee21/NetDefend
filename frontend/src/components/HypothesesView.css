@@ -105,3 +105,120 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ========================================================================
+ * v2 surfacing: version badges, null hypothesis, grounding note,
+ * capture-wide evidence panel. Additive; v1 renders none of these.
+ * ===================================================================== */
+
+.version-badges {
+  display: flex;
+  gap: 8px;
+  margin: -4px 0 4px;
+}
+
+.version-chip {
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.version-chip.is-v2 {
+  border-color: var(--accent, #009e73);
+  color: var(--accent, #009e73);
+}
+
+/* Null hypothesis flag -- same pill shape as the LLM-fail flag, amber. */
+.null-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 3px 9px;
+  border: 1px solid var(--uncertain);
+  border-radius: 999px;
+  color: var(--uncertain);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.argument.is-null {
+  opacity: 0.86;
+  border-style: dashed;
+}
+
+.grounding-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 2px 0 0;
+  color: var(--uncertain);
+  font-size: 10.5px;
+}
+
+.capture-wide .capture-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.capture-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--surface-2, rgba(255, 255, 255, 0.02));
+}
+
+.capture-value {
+  font-size: 16px;
+  color: var(--text);
+}
+
+.capture-source {
+  margin: 10px 0 0;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.capture-wide .panel-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* Collapsible "Dropped as ungrounded (N)" list under a hypothesis. */
+.grounding-drop {
+  margin: 2px 0 0;
+}
+.grounding-drop > summary {
+  cursor: pointer;
+  list-style: none;
+  width: fit-content;
+}
+.grounding-drop > summary::-webkit-details-marker {
+  display: none;
+}
+.grounding-drop-list {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.grounding-drop-list li {
+  margin: 2px 0;
+}
+.grounding-drop-empty {
+  margin: 6px 0 0;
+  font-size: 11px;
+}
